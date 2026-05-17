@@ -53,6 +53,7 @@ dependencies = [
  "agent-tui-acp",
  "agent-tui-agent",
  "agent-tui-config",
+ "agent-tui-eval",
  "agent-tui-llm",
  "agent-tui-mcp",
  "agent-tui-pipeline",
@@ -104,11 +105,25 @@ dependencies = [
 name = "agent-tui-eval"
 version = "0.1.0"
 dependencies = [
+ "agent-tui-llm",
+ "agent-tui-pipeline",
+ "agent-tui-protocol",
+ "agent-tui-retrieval",
+ "agent-tui-subagent",
+ "anyhow",
+ "async-trait",
  "camino",
  "chrono",
+ "futures",
+ "reqwest",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "tree-sitter",
+ "tree-sitter-python",
+ "uuid",
 ]
 
 [[package]]

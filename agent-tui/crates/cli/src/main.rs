@@ -72,6 +72,41 @@ enum Cmd {
         #[command(subcommand)]
         cmd: McpCmd,
     },
+    /// Run the SWE-bench evaluation harness (Phase 4).
+    ///
+    /// Use --dry-run for a fully offline smoke test with synthetic instances.
+    /// Use --compare run-a.json run-b.json to print a markdown diff table.
+    ///
+    /// Note: --scale N > 1 is only valid in headless (batch) mode.
+    Eval {
+        /// Benchmark name (default: swe-verified).
+        #[arg(long, default_value = "swe-verified")]
+        bench: String,
+        /// Number of instances to evaluate.
+        #[arg(long, default_value_t = 50)]
+        subset: u32,
+        /// Comma-separated list of specific instance IDs to evaluate.
+        #[arg(long, value_delimiter = ',', num_args = 0..)]
+        subset_ids: Vec<String>,
+        /// Provider override (falls back to the active config default).
+        #[arg(long)]
+        provider: Option<String>,
+        /// Model override.
+        #[arg(long)]
+        model: Option<String>,
+        /// Number of independent rollouts per instance (RTV; headless only).
+        #[arg(long, default_value_t = 1)]
+        scale: u32,
+        /// Per-instance wall-clock budget in seconds.
+        #[arg(long, default_value_t = 600)]
+        time_budget: u32,
+        /// Run entirely offline against synthetic instances (no network).
+        #[arg(long)]
+        dry_run: bool,
+        /// Compare two eval-run JSON files and print a markdown diff table.
+        #[arg(long, num_args = 2, value_names = ["RUN_A", "RUN_B"])]
+        compare: Vec<String>,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -120,6 +155,23 @@ async fn main() -> Result<()> {
         Some(Cmd::Fix { issue }) => cmd_fix(issue, &cfg, workspace).await,
         Some(Cmd::Index { graph_only }) => cmd_index(workspace, graph_only).await,
         Some(Cmd::Mcp { cmd }) => cmd_mcp(cmd, &cfg).await,
+        Some(Cmd::Eval {
+            bench,
+            subset,
+            subset_ids,
+            provider,
+            model,
+            scale,
+            time_budget,
+            dry_run,
+            compare,
+        }) => {
+            cmd_eval(
+                bench, subset, subset_ids, provider, model, scale,
+                time_budget, dry_run, compare, &cfg, workspace,
+            )
+            .await
+        }
         None => {
             if let Some(prompt) = cli.prompt {
                 cmd_oneshot(prompt, &cfg, workspace).await
@@ -602,6 +654,134 @@ fn _force_request() -> ChatRequest {
 
 #[allow(dead_code)]
 fn _force_llm(_: Arc<dyn LlmClient>) {}
+
+#[allow(clippy::too_many_arguments)]
+async fn cmd_eval(
+    bench: String,
+    subset: u32,
+    subset_ids: Vec<String>,
+    provider: Option<String>,
+    model: Option<String>,
+    scale: u32,
+    time_budget: u32,
+    dry_run: bool,
+    compare: Vec<String>,
+    cfg: &Config,
+    workspace: Utf8PathBuf,
+) -> Result<()> {
+    use agent_tui_eval::{compare::compare_runs, output_path, runner::RunConfig, runner::run_eval};
+
+    // ── Compare mode ──────────────────────────────────────────────────────
+    if compare.len() == 2 {
+        let run_a: agent_tui_eval::EvalRun = {
+            let data = std::fs::read_to_string(&compare[0])
+                .with_context(|| format!("reading {}", compare[0]))?;
+            serde_json::from_str(&data)
+                .with_context(|| format!("parsing {}", compare[0]))?
+        };
+        let run_b: agent_tui_eval::EvalRun = {
+            let data = std::fs::read_to_string(&compare[1])
+                .with_context(|| format!("reading {}", compare[1]))?;
+            serde_json::from_str(&data)
+                .with_context(|| format!("parsing {}", compare[1]))?
+        };
+        let md = compare_runs(&run_a, &run_b);
+        println!("{}", md);
+        return Ok(());
+    }
+
+    // ── Guard: --scale N > 1 is headless-only ────────────────────────────
+    // The `eval` subcommand is always headless (batch). However, if a user
+    // somehow invokes it from an interactive TUI session via a future `/eval`
+    // slash command, they should see a clear error.
+    if scale > 1 && std::env::var("AGENT_TUI_INTERACTIVE").is_ok() {
+        anyhow::bail!(
+            "--scale {} is only valid in headless mode. \
+             Remove --scale or run `agent-tui eval` from the command line (not the TUI).",
+            scale
+        );
+    }
+
+    let resolved_provider = provider
+        .as_deref()
+        .and_then(parse_provider)
+        .unwrap_or_else(|| resolve_provider(cfg));
+    let resolved_model = model
+        .clone()
+        .unwrap_or_else(|| resolve_model(cfg, resolved_provider));
+
+    let llm: Arc<dyn LlmClient> = if dry_run {
+        // In dry-run mode, pre-load enough scripted responses so that the
+        // "pass" synthetic instance produces a valid diff.
+        let mock = agent_tui_llm::MockClient::new();
+        let diff =
+            "Here is the fix:\n```diff\n\
+             diff --git a/clamp.py b/clamp.py\n\
+             --- a/clamp.py\n+++ b/clamp.py\n\
+             @@ -3,4 +3,4 @@\n\
+             -    if x > hi:\n\
+             +    if x >= hi:\n\
+                  return hi\n\
+             ```";
+        // Push one diff response per rollout per instance (scale * 2 instances).
+        // Extra calls fall back to the mock's empty-stream default.
+        for _ in 0..(scale.max(1) as usize * 2) {
+            mock.push_text(diff);
+        }
+        // RTV judge responses (scale > 1 triggers tournament voting).
+        if scale > 1 {
+            for _ in 0..(scale as usize) {
+                mock.push_text("1");
+            }
+        }
+        Arc::new(mock)
+    } else if std::env::var("AGENT_TUI_MOCK").is_ok() {
+        build_mock_client()
+    } else {
+        build_client(resolved_provider, cfg)
+    };
+
+    let run_config = RunConfig {
+        bench: bench.clone(),
+        subset_n: subset as usize,
+        subset_ids,
+        provider: resolved_provider.as_str().to_string(),
+        model: resolved_model,
+        scale,
+        time_budget_secs: time_budget,
+        dry_run,
+    };
+
+    eprintln!(
+        "agent-tui eval: bench={bench} subset={subset} scale={scale} dry_run={dry_run}"
+    );
+
+    let run = run_eval(run_config, llm)
+        .await
+        .context("evaluation harness")?;
+
+    // ── Write output JSON ─────────────────────────────────────────────────
+    let out = output_path();
+    // Create eval-runs/ directory relative to current working dir.
+    let out_path = workspace.join(&out);
+    if let Some(parent) = out_path.parent() {
+        std::fs::create_dir_all(parent).context("create eval-runs dir")?;
+    }
+    let json = serde_json::to_string_pretty(&run).context("serialise eval run")?;
+    std::fs::write(&out_path, json.as_bytes()).context("write eval run JSON")?;
+
+    // ── Print summary ─────────────────────────────────────────────────────
+    println!("=== eval summary ===");
+    println!("pass@1            : {:.3}", run.summary.pass_at_1);
+    println!("semantic_pass@1   : {:.3}", run.summary.semantic_pass_at_1);
+    println!("mean_cost_usd     : ${:.4}", run.summary.mean_cost_usd);
+    println!("mean_turns        : {:.1}", run.summary.mean_turns);
+    println!("mean_wallclock_s  : {:.1}", run.summary.mean_wallclock_s);
+    println!("instances         : {}", run.instances.len());
+    println!("output            : {}", out_path);
+
+    Ok(())
+}
 
 /// Map the [extensions] config block onto the engine flags. Phase 3.5–3.8
 /// extensions are toggled here so every entrypoint (oneshot, interactive,
