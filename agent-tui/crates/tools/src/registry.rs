@@ -85,6 +85,25 @@ impl ToolRegistry {
         ctx.retriever = Some(Arc::new(retriever));
     }
 
+    /// 3.12 — register every tool advertised by an `McpManager` as a
+    /// qualified `server:tool` adapter. Skipped tools are returned so
+    /// the caller can log them. Idempotent: re-registering a previously
+    /// known qualified name overwrites the older adapter.
+    pub async fn register_mcp_tools(
+        &mut self,
+        manager: &agent_tui_mcp::McpManager,
+    ) -> Result<usize, agent_tui_mcp::McpError> {
+        use crate::tools::mcp_adapter::McpToolAdapter;
+        let mut count = 0usize;
+        for desc in manager.list_all_tools().await? {
+            let Some(client) = manager.client_for(&desc.server_name) else { continue };
+            let adapter = McpToolAdapter::new(desc, client);
+            self.register(Arc::new(adapter));
+            count += 1;
+        }
+        Ok(count)
+    }
+
     /// 3.10 — opt-in registration of the REPL tool surface. Caller is
     /// responsible for only calling this when `Extensions::repl_tools`
     /// is true.

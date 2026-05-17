@@ -163,6 +163,36 @@ impl McpManager {
         self.configs.insert(cfg.name.clone(), cfg);
     }
 
+    /// 3.12 — look up the registered client by server name. Used by the
+    /// tools registry when building adapters so each adapter shares the
+    /// transport instead of re-spawning a child process.
+    pub fn client_for(&self, server: &str) -> Option<Arc<dyn McpManagedClient>> {
+        self.clients.get(server).cloned()
+    }
+
+    pub fn server_names(&self) -> Vec<String> {
+        self.configs.keys().cloned().collect()
+    }
+
+    /// 3.12 — convenience: spawn every enabled server in `cfgs` as a
+    /// `StdioMcpClient` and register the result. Servers that fail to
+    /// spawn are returned in the error list; ones marked
+    /// `enabled = false` are silently skipped.
+    pub async fn spawn_and_register_all(
+        &mut self,
+        cfgs: Vec<McpServerConfig>,
+    ) -> Vec<(String, McpError)> {
+        let mut failed: Vec<(String, McpError)> = Vec::new();
+        for cfg in cfgs {
+            if !cfg.enabled { continue; }
+            match StdioMcpClient::spawn(&cfg).await {
+                Ok(c) => self.register(cfg, Arc::new(c)),
+                Err(e) => failed.push((cfg.name.clone(), e)),
+            }
+        }
+        failed
+    }
+
     pub async fn list_all_tools(&self) -> Result<Vec<McpToolDescriptor>, McpError> {
         let mut out = Vec::new();
         for (_, c) in &self.clients {

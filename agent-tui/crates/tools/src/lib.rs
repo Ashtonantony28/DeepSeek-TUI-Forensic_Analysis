@@ -16,4 +16,5 @@ pub use checkpoint::{CheckpointError, CheckpointMeta, CheckpointStore};
 pub use memory::{Lesson, MemoryError, MemoryStore};
 pub use registry::{ToolContext, ToolRegistry};
 pub use schema::ToolSchema;
+pub use tools::mcp_adapter::McpToolAdapter;
 pub use tools::{Tool, ToolError, ToolResult};

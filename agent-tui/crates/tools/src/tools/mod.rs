@@ -1,4 +1,5 @@
 pub mod builtins;
+pub mod mcp_adapter;
 pub mod repl;
 
 use crate::registry::ToolContext;

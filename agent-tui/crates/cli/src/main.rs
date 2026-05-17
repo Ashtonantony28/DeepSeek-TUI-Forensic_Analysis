@@ -67,6 +67,29 @@ enum Cmd {
         #[arg(long)]
         graph_only: bool,
     },
+    /// MCP server inspection and probing (Phase 3.12).
+    Mcp {
+        #[command(subcommand)]
+        cmd: McpCmd,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum McpCmd {
+    /// List MCP servers from the merged config and the tools they expose.
+    List,
+    /// Spawn one MCP server by command + args and print its tools.
+    Probe {
+        /// Executable to run.
+        #[arg(long)]
+        command: String,
+        /// Args to pass.
+        #[arg(long, num_args = 0..)]
+        args: Vec<String>,
+        /// Optional server name for the qualified `server:tool` form.
+        #[arg(long, default_value = "probe")]
+        name: String,
+    },
 }
 
 #[tokio::main]
@@ -96,6 +119,7 @@ async fn main() -> Result<()> {
         }
         Some(Cmd::Fix { issue }) => cmd_fix(issue, &cfg, workspace).await,
         Some(Cmd::Index { graph_only }) => cmd_index(workspace, graph_only).await,
+        Some(Cmd::Mcp { cmd }) => cmd_mcp(cmd, &cfg).await,
         None => {
             if let Some(prompt) = cli.prompt {
                 cmd_oneshot(prompt, &cfg, workspace).await
@@ -224,6 +248,78 @@ async fn cmd_models(cfg: &Config) -> Result<()> {
     Ok(())
 }
 
+fn load_mcp_servers(cfg: &Config) -> Vec<agent_tui_mcp::McpServerConfig> {
+    let Some(path) = &cfg.mcp_config_path else { return Vec::new() };
+    match agent_tui_mcp::McpManager::load_config(path) {
+        Ok(servers) => servers,
+        Err(e) => {
+            eprintln!("warning: failed to load mcp config {}: {}", path, e);
+            Vec::new()
+        }
+    }
+}
+
+async fn cmd_mcp(cmd: McpCmd, cfg: &Config) -> Result<()> {
+    use agent_tui_mcp::{McpManager, McpServerConfig, StdioMcpClient};
+    use std::collections::HashMap;
+    match cmd {
+        McpCmd::List => {
+            let servers = load_mcp_servers(cfg);
+            if servers.is_empty() {
+                println!("(no MCP servers configured — set `mcp_config_path` in ~/.agent-tui/config.toml)");
+                return Ok(());
+            }
+            let mut mgr = McpManager::new();
+            let failed = mgr.spawn_and_register_all(servers).await;
+            for (name, err) in &failed {
+                eprintln!("{name}: failed to spawn ({err})");
+            }
+            let tools = mgr
+                .list_all_tools()
+                .await
+                .map_err(|e| anyhow!("list_tools: {e}"))?;
+            if tools.is_empty() {
+                println!("(servers up but advertised no tools)");
+            }
+            for t in tools {
+                println!(
+                    "{server}:{tool} — {desc}",
+                    server = t.server_name,
+                    tool = t.tool_name,
+                    desc = t.description.as_deref().unwrap_or(""),
+                );
+            }
+            Ok(())
+        }
+        McpCmd::Probe { command, args, name } => {
+            let cfg = McpServerConfig {
+                name: name.clone(),
+                command,
+                args,
+                env: HashMap::new(),
+                enabled: true,
+            };
+            let client = StdioMcpClient::spawn(&cfg)
+                .await
+                .map_err(|e| anyhow!("spawn: {e}"))?;
+            let tools = agent_tui_mcp::McpManagedClient::list_tools(&client)
+                .await
+                .map_err(|e| anyhow!("list_tools: {e}"))?;
+            if tools.is_empty() {
+                println!("(server `{name}` advertised no tools)");
+            }
+            for t in tools {
+                println!(
+                    "{name}:{tool} — {desc}",
+                    tool = t.tool_name,
+                    desc = t.description.as_deref().unwrap_or(""),
+                );
+            }
+            Ok(())
+        }
+    }
+}
+
 async fn cmd_fix(issue: String, cfg: &Config, workspace: Utf8PathBuf) -> Result<()> {
     use agent_tui_pipeline::{HierarchicalPipeline, Issue, Pipeline, PipelineContext};
     let provider = resolve_provider(cfg);
@@ -308,6 +404,18 @@ async fn cmd_oneshot(prompt: String, cfg: &Config, workspace: Utf8PathBuf) -> Re
     ToolRegistry::enable_hybrid_retrieval(&mut ctx).await;
     if cfg.extensions.repl_tools {
         reg.enable_repl_tools(&mut ctx);
+    }
+    // 3.12 — register MCP tools from the merged config (if any).
+    let mcp_servers = load_mcp_servers(cfg);
+    if !mcp_servers.is_empty() {
+        let mut mgr = agent_tui_mcp::McpManager::new();
+        let failed = mgr.spawn_and_register_all(mcp_servers).await;
+        for (name, err) in &failed {
+            eprintln!("warning: mcp server `{name}` failed to spawn: {err}");
+        }
+        if let Err(e) = reg.register_mcp_tools(&mgr).await {
+            eprintln!("warning: mcp tool registration failed: {e}");
+        }
     }
     let mut engine = Engine::new(session, client, Arc::new(reg), Arc::new(ctx));
     apply_extensions(&mut engine, cfg);

@@ -9,6 +9,7 @@ license.workspace = true
 agent-tui-protocol.workspace = true
 agent-tui-execpolicy.workspace = true
 agent-tui-retrieval.workspace = true
+agent-tui-mcp.workspace = true
 async-trait.workspace = true
 tokio = { workspace = true }
 serde.workspace = true
