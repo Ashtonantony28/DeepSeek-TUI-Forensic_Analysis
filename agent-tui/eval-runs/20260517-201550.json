@@ -1,0 +1,38 @@
+{
+  "config": {
+    "bench": "swe-verified",
+    "subset_n": 2,
+    "provider": "anthropic",
+    "model": "claude-opus-4-7",
+    "scale": 4,
+    "time_budget_secs": 600
+  },
+  "summary": {
+    "pass_at_1": 0.5,
+    "semantic_pass_at_1": 0.5,
+    "mean_cost_usd": 0.0,
+    "mean_turns": 2.5,
+    "mean_wallclock_s": 0.0030355316
+  },
+  "instances": [
+    {
+      "instance_id": "synthetic__pass__001",
+      "pass_at_1": true,
+      "semantic_pass": true,
+      "cost_usd": 0.0,
+      "turns": 4,
+      "wallclock_s": 0.004570248,
+      "patch_diff": "diff --git a/clamp.py b/clamp.py\n--- a/clamp.py\n+++ b/clamp.py\n@@ -3,4 +3,4 @@\n-    if x > hi:\n+    if x >= hi:\nreturn hi\n"
+    },
+    {
+      "instance_id": "synthetic__fail__002",
+      "pass_at_1": false,
+      "semantic_pass": false,
+      "cost_usd": 0.0,
+      "turns": 1,
+      "wallclock_s": 0.001500815,
+      "patch_diff": "diff --git a/clamp.py b/clamp.py\n--- a/clamp.py\n+++ b/clamp.py\n@@ -3,4 +3,4 @@\n-    if x > hi:\n+    if x >= hi:\nreturn hi\n"
+    }
+  ],
+  "timestamp": "2026-05-17T20:15:50.207473063Z"
+}
