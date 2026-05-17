@@ -164,12 +164,19 @@ dependencies = [
 name = "agent-tui-pipeline"
 version = "0.1.0"
 dependencies = [
+ "agent-tui-llm",
  "agent-tui-protocol",
+ "agent-tui-retrieval",
+ "agent-tui-subagent",
  "async-trait",
  "camino",
+ "regex",
  "serde",
+ "serde_json",
+ "tempfile",
  "thiserror 1.0.69",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

@@ -94,10 +94,7 @@ async fn main() -> Result<()> {
         Some(Cmd::Serve { http, acp, addr }) => {
             cmd_serve(http, acp, addr, &cfg, workspace).await
         }
-        Some(Cmd::Fix { issue: _ }) => {
-            eprintln!("`fix` is stubbed in Phase 2; lands in Phase 3.11");
-            Ok(())
-        }
+        Some(Cmd::Fix { issue }) => cmd_fix(issue, &cfg, workspace).await,
         Some(Cmd::Index { graph_only }) => cmd_index(workspace, graph_only).await,
         None => {
             if let Some(prompt) = cli.prompt {
@@ -224,6 +221,42 @@ async fn cmd_models(cfg: &Config) -> Result<()> {
             m.supports_tools,
         );
     }
+    Ok(())
+}
+
+async fn cmd_fix(issue: String, cfg: &Config, workspace: Utf8PathBuf) -> Result<()> {
+    use agent_tui_pipeline::{HierarchicalPipeline, Issue, Pipeline, PipelineContext};
+    let provider = resolve_provider(cfg);
+    let model = resolve_model(cfg, provider);
+    let client: Arc<dyn LlmClient> = if std::env::var("AGENT_TUI_MOCK").is_ok() {
+        build_mock_client()
+    } else {
+        build_client(provider, cfg)
+    };
+
+    // Build the same hybrid retriever the agent loop uses.
+    let retriever = agent_tui_retrieval::HybridRetriever::new(workspace.clone())
+        .prepare()
+        .await;
+    let retriever: Arc<dyn agent_tui_retrieval::Retriever> = Arc::new(retriever);
+
+    // Treat the argument as either a path (read file as the issue body) or
+    // a raw inline issue title.
+    let (title, body) = match std::fs::read_to_string(&issue) {
+        Ok(text) => {
+            let first_line = text.lines().next().unwrap_or("").to_string();
+            (first_line, text)
+        }
+        Err(_) => (issue.clone(), issue.clone()),
+    };
+
+    let pipeline = HierarchicalPipeline::new(client, retriever, model);
+    let pctx = PipelineContext { workspace_root: workspace };
+    let patch = pipeline
+        .run(&Issue { title, body, failing_tests: vec![] }, &pctx)
+        .await
+        .map_err(|e| anyhow!("pipeline: {e}"))?;
+    println!("{}", patch.unified_diff);
     Ok(())
 }
 
