@@ -10,7 +10,11 @@
 //! 1. The summarizer runs against the **router's `Small` tier** so the
 //!    main reasoning model isn't billed for it. The caller resolves the
 //!    cheap model up-front and passes it in — this crate stays
-//!    provider-agnostic.
+//!    provider-agnostic. Some providers (notably OpenAI) host their
+//!    small/cheap models on a separate endpoint from the large models,
+//!    so `FlashCompactor` accepts an *optional* second `LlmClient`
+//!    dedicated to the small-tier call. When absent, it falls back to
+//!    the main client.
 //!
 //! 2. Compaction is opt-in via `Engine::compaction_enabled`. Default-on
 //!    in `Engine::new` but disabled in tests that don't push summary
@@ -87,13 +91,34 @@ const CYCLE_PROMPT: &str =
 /// Cheap-model summarizer used for both seam and cycle compactions.
 #[derive(Clone)]
 pub struct FlashCompactor {
+    /// Main reasoning model client. Used as a fallback when no
+    /// dedicated small-tier client is configured.
     pub llm: Arc<dyn LlmClient>,
+    /// Optional dedicated client for the small/cheap tier. Providers
+    /// like OpenAI host gpt-4o-mini and gpt-4o on the same endpoint,
+    /// but multi-endpoint setups (e.g. a private gateway that fronts
+    /// gpt-4o-mini through a different base URL or credential) require
+    /// a distinct `LlmClient`.
+    pub small_llm: Option<Arc<dyn LlmClient>>,
     pub model: String,
 }
 
 impl FlashCompactor {
-    pub fn new(llm: Arc<dyn LlmClient>, model: impl Into<String>) -> Self {
-        Self { llm, model: model.into() }
+    /// Construct a compactor. `small_llm` is the optional dedicated
+    /// client for the small-tier summary call; when `None`, the
+    /// compactor falls back to `llm`.
+    pub fn new(
+        llm: Arc<dyn LlmClient>,
+        small_llm: Option<Arc<dyn LlmClient>>,
+        model: impl Into<String>,
+    ) -> Self {
+        Self { llm, small_llm, model: model.into() }
+    }
+
+    /// The client that will actually be used for the small-tier
+    /// summary call.
+    pub fn summary_client(&self) -> &Arc<dyn LlmClient> {
+        self.small_llm.as_ref().unwrap_or(&self.llm)
     }
 
     pub async fn summarize_seam(&self, head: &[Message]) -> Result<String, String> {
@@ -119,7 +144,7 @@ impl FlashCompactor {
         req.max_output_tokens = Some(max_tokens);
 
         let mut stream = self
-            .llm
+            .summary_client()
             .stream(req)
             .await
             .map_err(|e| format!("flash compactor llm: {e}"))?;
@@ -139,6 +164,7 @@ impl FlashCompactor {
 mod tests {
     use super::*;
     use agent_tui_llm::MockClient;
+    use agent_tui_protocol::Provider;
 
     fn user(s: &str) -> Message { Message::user_text(s) }
     fn asst(s: &str) -> Message { Message::assistant_text(s) }
@@ -147,7 +173,7 @@ mod tests {
     async fn seam_summary_round_trip() {
         let mock = Arc::new(MockClient::new());
         mock.push_text("Refactored parser; updated tests; left lint warning in src/foo.rs");
-        let c = FlashCompactor::new(mock as Arc<dyn LlmClient>, "mock-flash");
+        let c = FlashCompactor::new(mock as Arc<dyn LlmClient>, None, "mock-flash");
         let head = vec![user("hi"), asst("hello"), user("please refactor src/foo.rs")];
         let out = c.summarize_seam(&head).await.unwrap();
         assert!(out.contains("foo.rs"));
@@ -157,7 +183,7 @@ mod tests {
     async fn cycle_summary_round_trip() {
         let mock = Arc::new(MockClient::new());
         mock.push_text("Goal: build agent-tui. Decided: 14 crates. TODO: ship eval harness.");
-        let c = FlashCompactor::new(mock as Arc<dyn LlmClient>, "mock-flash");
+        let c = FlashCompactor::new(mock as Arc<dyn LlmClient>, None, "mock-flash");
         let head = vec![user("scope?"), asst("we're building agent-tui in 14 crates")];
         let out = c.summarize_cycle(&head).await.unwrap();
         assert!(out.contains("agent-tui"));
@@ -167,8 +193,43 @@ mod tests {
     #[tokio::test]
     async fn empty_head_returns_empty() {
         let mock = Arc::new(MockClient::new());
-        let c = FlashCompactor::new(mock as Arc<dyn LlmClient>, "mock-flash");
+        let c = FlashCompactor::new(mock as Arc<dyn LlmClient>, None, "mock-flash");
         let out = c.summarize_seam(&[]).await.unwrap();
         assert!(out.is_empty());
+    }
+
+    /// Multi-endpoint wiring: when a dedicated small-tier client is
+    /// supplied, the compactor stores it and routes the summary call
+    /// through it instead of the main client. We don't invoke the
+    /// client — we verify the constructor wired it correctly.
+    #[test]
+    fn small_client_wired_in_constructor() {
+        // Two clients with distinct providers so we can tell them apart
+        // without invoking either one.
+        let main = Arc::new(MockClient::new().with_provider(Provider::Anthropic))
+            as Arc<dyn LlmClient>;
+        let small = Arc::new(MockClient::new().with_provider(Provider::OpenAi))
+            as Arc<dyn LlmClient>;
+
+        let c = FlashCompactor::new(main.clone(), Some(small.clone()), "mock-flash");
+
+        assert!(c.small_llm.is_some(), "small_llm should be stored");
+        assert_eq!(c.llm.provider(), Provider::Anthropic);
+        assert_eq!(
+            c.summary_client().provider(),
+            Provider::OpenAi,
+            "summary call should route through the small-tier client",
+        );
+    }
+
+    /// When no small-tier client is supplied, `summary_client()` must
+    /// fall back to the main client.
+    #[test]
+    fn falls_back_to_main_client_when_small_is_none() {
+        let main = Arc::new(MockClient::new().with_provider(Provider::Anthropic))
+            as Arc<dyn LlmClient>;
+        let c = FlashCompactor::new(main, None, "mock-flash");
+        assert!(c.small_llm.is_none());
+        assert_eq!(c.summary_client().provider(), Provider::Anthropic);
     }
 }

@@ -57,6 +57,12 @@ pub struct Engine {
     /// the router's `Small` tier in `Engine::new` so it always matches the
     /// configured provider.
     pub compactor_model: String,
+    /// 3.9 — optional dedicated client for the small/cheap tier used by
+    /// the Flash compactor. Multi-endpoint provider setups (e.g. OpenAI
+    /// small models fronted by a different base URL than the large
+    /// models) wire this in from `[compaction].small_model_client`.
+    /// When `None`, the compactor falls back to `llm`.
+    pub small_llm: Option<Arc<dyn LlmClient>>,
 }
 
 #[derive(Clone)]
@@ -106,6 +112,7 @@ impl Engine {
             dars_verifier_count: 3,
             compaction_enabled: true,
             compactor_model,
+            small_llm: None,
         }
     }
 
@@ -475,7 +482,11 @@ impl Engine {
         }
         let head_count = outcome.head_message_count.min(self.session.messages.len());
         let head = &self.session.messages[..head_count];
-        let c = FlashCompactor::new(self.llm.clone(), &self.compactor_model);
+        let c = FlashCompactor::new(
+            self.llm.clone(),
+            self.small_llm.clone(),
+            &self.compactor_model,
+        );
         match c.summarize_seam(head).await {
             Ok(s) if !s.is_empty() => s,
             Ok(_) => "[empty summary]".into(),
@@ -497,7 +508,11 @@ impl Engine {
         if tokens < self.cycle.config.cycle_tokens {
             return String::new();
         }
-        let c = FlashCompactor::new(self.llm.clone(), &self.compactor_model);
+        let c = FlashCompactor::new(
+            self.llm.clone(),
+            self.small_llm.clone(),
+            &self.compactor_model,
+        );
         match c.summarize_cycle(&self.session.messages).await {
             Ok(s) if !s.is_empty() => s,
             Ok(_) => "[empty briefing]".into(),

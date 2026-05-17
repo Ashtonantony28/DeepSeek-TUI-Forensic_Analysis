@@ -51,7 +51,23 @@ pub struct Config {
     #[serde(default)]
     pub extensions: Extensions,
     #[serde(default)]
+    pub compaction: CompactionConfig,
+    #[serde(default)]
     pub yolo: bool,
+}
+
+/// `[compaction]` section. Controls how the Flash-tier seam/cycle
+/// summarizer is wired up.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CompactionConfig {
+    /// Optional provider key (matching a section under `[providers.*]`)
+    /// whose client should be used for the small-tier summarization
+    /// call instead of the main reasoning client. Required when the
+    /// configured provider hosts its small models on a different
+    /// endpoint than its large models (e.g. a private gateway that
+    /// fronts gpt-4o-mini through a separate base URL).
+    #[serde(default)]
+    pub small_model_client: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
