@@ -1,4 +1,5 @@
 use crate::checkpoint::CheckpointStore;
+use crate::memory::MemoryStore;
 use crate::tools::Tool;
 use agent_tui_execpolicy::{ApprovalGate, EgressPolicy};
 use agent_tui_protocol::AppMode;
@@ -16,11 +17,14 @@ pub struct ToolContext {
     pub checkpoints: Arc<CheckpointStore>,
     /// Optional retriever used by `semantic_search` (wired in 3.4).
     pub retriever: Option<Arc<dyn agent_tui_retrieval::Retriever>>,
+    /// Cross-session memory store (3.5). Always present; `disabled()` is a no-op.
+    pub memory: Arc<MemoryStore>,
 }
 
 impl ToolContext {
     pub fn new(workspace_root: Utf8PathBuf) -> Self {
         let checkpoints = Arc::new(CheckpointStore::open(&workspace_root));
+        let memory = Arc::new(MemoryStore::load(&workspace_root));
         Self {
             workspace_root,
             mode: AppMode::Agent,
@@ -29,6 +33,7 @@ impl ToolContext {
             approvals: Arc::new(ApprovalGate::new()),
             checkpoints,
             retriever: None,
+            memory,
         }
     }
 }
@@ -91,6 +96,8 @@ impl ToolRegistry {
         reg.register(Arc::new(GitCommitTool));
         reg.register(Arc::new(GitLogTool));
         reg.register(Arc::new(UpdatePlanTool));
+        reg.register(Arc::new(RememberTool));
+        reg.register(Arc::new(RecallTool));
         reg.register(Arc::new(ListCheckpointsTool));
         reg.register(Arc::new(CheckpointDiffTool));
         reg.register(Arc::new(RollbackTool));

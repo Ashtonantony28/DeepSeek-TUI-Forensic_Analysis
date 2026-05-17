@@ -10,7 +10,7 @@ use agent_tui_llm::{
     ChatRequest, LlmClient, StreamEvent, ToolSchema as LlmToolSchema,
 };
 use agent_tui_protocol::{
-    AppMode, ContentBlock, DeltaChannel, Event, GuardrailAction, Message, Op, Provider,
+    AppMode, ContentBlock, DeltaChannel, Event, GuardrailAction, Message, Op, PlanItem, Provider,
     RiskBand, Role, ToolCallId, TurnId,
 };
 use agent_tui_tools::{Tool, ToolContext, ToolRegistry};
@@ -32,6 +32,22 @@ pub struct Engine {
     pub model_context_window: u32,
     pub checkpoint_enabled: bool,
     pub auto_test_enabled: bool,
+    pub memory_enabled: bool,
+    /// Auto-routing (extension 3.6). When true, the engine consults
+    /// `Router::pick(prompt)` on each Submit and may swap the session
+    /// model. When false, the user's choice of model is kept verbatim.
+    pub routing_enabled: bool,
+    pub router: crate::routing::Router,
+    /// 3.7 — when true, the engine emits `Event::PlanUpdated` whenever
+    /// the model calls `update_plan`. Off skips the side-panel update
+    /// without disabling the tool itself.
+    pub plan_blocks_enabled: bool,
+    /// 3.8 — when true, `Op::SpawnSubAgent { prompt }` runs a DARS
+    /// branching pass instead of the legacy "deferred" stub. The vote
+    /// budget is `verifier_count`.
+    pub dars_enabled: bool,
+    pub dars_branch_count: usize,
+    pub dars_verifier_count: usize,
 }
 
 #[derive(Clone)]
@@ -56,6 +72,7 @@ impl Engine {
         tools: Arc<ToolRegistry>,
         tool_ctx: Arc<ToolContext>,
     ) -> Self {
+        let provider = llm.provider();
         Self {
             session,
             mode: AppMode::Agent,
@@ -69,6 +86,13 @@ impl Engine {
             model_context_window: 200_000,
             checkpoint_enabled: true,
             auto_test_enabled: true,
+            memory_enabled: true,
+            routing_enabled: false,
+            router: crate::routing::Router::new(provider),
+            plan_blocks_enabled: true,
+            dars_enabled: true,
+            dars_branch_count: 3,
+            dars_verifier_count: 3,
         }
     }
 
@@ -88,7 +112,24 @@ impl Engine {
                 Op::Submit { content, mode, model, provider: _ } => {
                     self.mode = mode;
                     if let Some(m) = model {
+                        // User-pinned model bypasses the router.
                         self.session.model = m;
+                    } else if self.routing_enabled {
+                        // 3.6 — auto routing. Picked model is announced via
+                        // a Status event so the UI can render the choice.
+                        let (tier, picked) = self.router.pick(&content);
+                        if picked != self.session.model {
+                            let _ = event_tx
+                                .send(Event::Status {
+                                    turn_id: None,
+                                    message: format!(
+                                        "router: {tier} -> {picked}",
+                                        tier = tier.label(),
+                                    ),
+                                })
+                                .await;
+                            self.session.model = picked.to_string();
+                        }
                     }
                     self.session.messages.push(Message::user_text(content));
                     if let Err(e) = self.run_turn(&event_tx).await {
@@ -115,11 +156,15 @@ impl Engine {
                         .approvals
                         .resolve(&id, decision_to_exec(decision), "pending");
                 }
-                Op::SpawnSubAgent { .. } => {
-                    let _ = event_tx.send(Event::Status {
-                        turn_id: None,
-                        message: "sub-agent spawn (Phase 3.8 deferred)".into(),
-                    }).await;
+                Op::SpawnSubAgent { prompt } => {
+                    if self.dars_enabled {
+                        self.run_dars_pass(prompt, &event_tx).await;
+                    } else {
+                        let _ = event_tx.send(Event::Status {
+                            turn_id: None,
+                            message: "sub-agent spawn: dars disabled".into(),
+                        }).await;
+                    }
                 }
                 Op::Shutdown => break,
             }
@@ -182,10 +227,42 @@ impl Engine {
             })
             .collect();
 
+        // 3.5 — pull relevant lessons from cross-session memory and append
+        // them to the system prompt for this turn (does not mutate the
+        // persistent session.system_prompt, so prefix-cache stays stable
+        // across turns with different queries).
+        let memory_suffix: Option<String> = if self.memory_enabled {
+            let query = latest_user_text(&self.session.messages).unwrap_or_default();
+            if query.is_empty() {
+                None
+            } else {
+                self.tool_ctx.memory.suffix_for(&query, 3)
+            }
+        } else {
+            None
+        };
+        if memory_suffix.is_some() {
+            let _ = event_tx.send(Event::Status {
+                turn_id: Some(turn_id.clone()),
+                message: format!(
+                    "memory: injected {} lesson(s)",
+                    self.tool_ctx.memory.retrieve(
+                        latest_user_text(&self.session.messages).unwrap_or_default().as_str(),
+                        3,
+                    ).len()
+                ),
+            }).await;
+        }
+
         // -- Stream from LLM. Loop until end_turn (no tool calls). --
         for _round in 0..8 {
             let mut req = ChatRequest::new(&self.session.model);
-            req.system = self.session.system_prompt.clone();
+            req.system = match (&self.session.system_prompt, &memory_suffix) {
+                (Some(s), Some(suffix)) => Some(format!("{s}{suffix}")),
+                (Some(s), None) => Some(s.clone()),
+                (None, Some(suffix)) => Some(suffix.trim_start().to_string()),
+                (None, None) => None,
+            };
             req.messages = self.session.messages.clone();
             req.tools = tool_schemas.clone();
             req.max_output_tokens = Some(2048);
@@ -295,7 +372,7 @@ impl Engine {
                     input: input.clone(),
                 }).await;
                 let is_destructive = !tool.is_read_only();
-                let result = tool.execute(input, &self.tool_ctx).await;
+                let result = tool.execute(input.clone(), &self.tool_ctx).await;
                 let (output_str, is_error) = match result {
                     Ok(r) => (r.content, r.is_error),
                     Err(e) => (format!("error: {e}"), true),
@@ -309,9 +386,22 @@ impl Engine {
                 }).await;
                 tool_results.push(ContentBlock::ToolResult {
                     tool_use_id: id.clone(),
-                    content: output_str,
+                    content: output_str.clone(),
                     is_error,
                 });
+
+                // 3.7 — surface plan updates from the `update_plan` tool.
+                if !is_error && name == "update_plan" && self.plan_blocks_enabled {
+                    if let Some((goal, items)) = extract_plan(&input) {
+                        let _ = event_tx
+                            .send(Event::PlanUpdated {
+                                turn_id: turn_id.clone(),
+                                goal,
+                                items,
+                            })
+                            .await;
+                    }
+                }
 
                 // 3.1 — post-tool checkpoint for successful destructive calls.
                 if is_destructive && !is_error && self.checkpoint_enabled {
@@ -354,6 +444,51 @@ impl Engine {
 }
 
 impl Engine {
+    /// 3.8 — fan a prompt out across `dars_branch_count` parallel
+    /// sub-agents, then have `dars_verifier_count` verifier sub-agents
+    /// vote on the winner. Streams the winning answer as a normal text
+    /// delta and emits `Event::DarsResult` with the vote breakdown.
+    async fn run_dars_pass(&self, prompt: String, event_tx: &mpsc::Sender<Event>) {
+        use agent_tui_subagent::{run_dars, DarsConfig, SubAgentManager};
+        let mgr = SubAgentManager::new(self.llm.clone());
+        let cfg = DarsConfig {
+            branch_count: self.dars_branch_count.max(1),
+            verifier_count: self.dars_verifier_count.max(1),
+            model: self.session.model.clone(),
+            system_prompt: self.session.system_prompt.clone(),
+            max_parallel: self.dars_branch_count.max(1),
+        };
+        let turn_id = TurnId::new();
+        let _ = event_tx.send(Event::TurnStarted { turn_id: turn_id.clone() }).await;
+        let _ = event_tx.send(Event::Status {
+            turn_id: Some(turn_id.clone()),
+            message: format!(
+                "dars: {} branches x {} verifiers",
+                cfg.branch_count, cfg.verifier_count,
+            ),
+        }).await;
+        match run_dars(&mgr, &cfg, &prompt).await {
+            Ok(outcome) => {
+                let _ = event_tx.send(Event::Delta {
+                    turn_id: turn_id.clone(),
+                    channel: DeltaChannel::Text,
+                    delta: outcome.winner_answer.clone(),
+                }).await;
+                let _ = event_tx.send(Event::DarsResult {
+                    winner_index: outcome.winner_index,
+                    branch_count: outcome.candidates.len(),
+                    votes: outcome.votes,
+                }).await;
+            }
+            Err(e) => {
+                let _ = event_tx.send(Event::Error {
+                    message: format!("dars failed: {e}"),
+                }).await;
+            }
+        }
+        let _ = event_tx.send(Event::TurnComplete { turn_id }).await;
+    }
+
     async fn run_auto_test_round(
         &mut self,
         runner: TestRunner,
@@ -437,3 +572,47 @@ fn decision_to_exec(d: agent_tui_protocol::Decision) -> agent_tui_execpolicy::De
 
 #[allow(dead_code)]
 fn provider_label(p: Provider) -> &'static str { p.as_str() }
+
+/// 3.7 — pull `goal` + `steps[]` out of an `update_plan` tool call.
+/// Returns `None` if the input shape is unexpected so we never emit a
+/// half-formed plan event.
+pub(crate) fn extract_plan(input: &serde_json::Value) -> Option<(String, Vec<PlanItem>)> {
+    let goal = input.get("goal").and_then(|v| v.as_str())?.to_string();
+    let steps = input.get("steps").and_then(|v| v.as_array())?;
+    let items: Vec<PlanItem> = steps
+        .iter()
+        .filter_map(|s| {
+            // Steps may be plain strings or {step, done} records.
+            if let Some(text) = s.as_str() {
+                Some(PlanItem { step: text.to_string(), done: false })
+            } else if let Some(obj) = s.as_object() {
+                let step = obj.get("step").and_then(|v| v.as_str())?.to_string();
+                let done = obj.get("done").and_then(|v| v.as_bool()).unwrap_or(false);
+                Some(PlanItem { step, done })
+            } else {
+                None
+            }
+        })
+        .collect();
+    Some((goal, items))
+}
+
+/// Walk the message log backwards and return the last user text block.
+/// Used by the 3.5 memory injector and the 3.6 router to score complexity.
+pub(crate) fn latest_user_text(messages: &[agent_tui_protocol::Message]) -> Option<String> {
+    use agent_tui_protocol::{ContentBlock, Role};
+    for m in messages.iter().rev() {
+        if !matches!(m.role, Role::User) { continue; }
+        let mut buf = String::new();
+        for c in &m.content {
+            if let ContentBlock::Text { text } = c {
+                if !buf.is_empty() { buf.push('\n'); }
+                buf.push_str(text);
+            }
+        }
+        if !buf.is_empty() {
+            return Some(buf);
+        }
+    }
+    None
+}

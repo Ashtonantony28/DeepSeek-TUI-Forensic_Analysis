@@ -3,7 +3,7 @@
 //! Five panels per the plan:
 //!   - Composer (bottom)
 //!   - Transcript (centre, scrollable)
-//!   - Plan/reflection side panel (right; empty until Phase 3.7)
+//!   - Plan side panel (right; populated by `update_plan` tool calls — 3.7)
 //!   - Status bar (top)
 //!   - Command palette (Ctrl+K modal)
 //!
@@ -13,4 +13,4 @@
 pub mod app;
 pub mod render;
 
-pub use app::{run_tui, App};
+pub use app::{run_tui, App, EngineKnobs};

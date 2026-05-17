@@ -12,6 +12,7 @@ agent-tui-tools.workspace = true
 agent-tui-context.workspace = true
 agent-tui-execpolicy.workspace = true
 agent-tui-config.workspace = true
+agent-tui-subagent.workspace = true
 async-trait.workspace = true
 tokio = { workspace = true }
 futures.workspace = true
@@ -20,6 +21,8 @@ serde_json.workspace = true
 thiserror.workspace = true
 camino.workspace = true
 tracing.workspace = true
+once_cell.workspace = true
+regex.workspace = true
 
 [dev-dependencies]
 tempfile = "3.10"

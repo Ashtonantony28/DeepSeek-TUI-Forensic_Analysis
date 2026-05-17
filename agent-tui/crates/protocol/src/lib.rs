@@ -290,6 +290,13 @@ pub enum DeltaChannel {
     Thinking,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PlanItem {
+    pub step: String,
+    #[serde(default)]
+    pub done: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "event", rename_all = "snake_case")]
 pub enum Event {
@@ -344,6 +351,20 @@ pub enum Event {
     TurnAborted {
         turn_id: TurnId,
         reason: String,
+    },
+    /// 3.7 — the agent's working plan (from the `update_plan` tool).
+    PlanUpdated {
+        turn_id: TurnId,
+        goal: String,
+        items: Vec<PlanItem>,
+    },
+    /// 3.8 — a DARS branching+verification pass finished. The winner
+    /// is also surfaced as a regular `Delta` so the transcript stays
+    /// readable.
+    DarsResult {
+        winner_index: usize,
+        branch_count: usize,
+        votes: Vec<usize>,
     },
     Error { message: String },
 }

@@ -106,13 +106,42 @@ fn draw_transcript(f: &mut Frame, area: Rect, app: &App) {
     f.render_widget(para, area);
 }
 
-fn draw_side_panel(f: &mut Frame, area: Rect, _app: &App) {
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .title("plan / reflect");
-    let para = Paragraph::new("(empty until Phase 3.7)")
-        .block(block)
-        .style(Style::default().fg(Color::DarkGray));
+fn draw_side_panel(f: &mut Frame, area: Rect, app: &App) {
+    let block = Block::default().borders(Borders::ALL).title("plan");
+    let mut lines: Vec<Line> = Vec::new();
+    match &app.plan_goal {
+        Some(g) => {
+            lines.push(Line::from(vec![Span::styled(
+                "goal: ",
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+            ), Span::raw(g.clone())]));
+            lines.push(Line::from(""));
+            for (i, item) in app.plan_items.iter().enumerate() {
+                let marker = if item.done { "[x] " } else { "[ ] " };
+                let style = if item.done {
+                    Style::default().fg(Color::Green)
+                } else {
+                    Style::default()
+                };
+                lines.push(Line::from(vec![
+                    Span::styled(format!("{:>2}. {marker}", i + 1), style),
+                    Span::raw(item.step.clone()),
+                ]));
+            }
+        }
+        None => {
+            lines.push(Line::from(Span::styled(
+                "no plan yet",
+                Style::default().fg(Color::DarkGray),
+            )));
+            lines.push(Line::from(""));
+            lines.push(Line::from(Span::styled(
+                "the agent populates this panel via update_plan",
+                Style::default().fg(Color::DarkGray),
+            )));
+        }
+    }
+    let para = Paragraph::new(lines).block(block).wrap(Wrap { trim: false });
     f.render_widget(para, area);
 }
 

@@ -5,8 +5,11 @@
 //! forbids the Python runtime dependency; see ANALYSIS.md §11).
 //!
 //! `parallel_fan_out` runs up to N concurrent calls and returns all
-//! results in order — this is the primitive used by Phase 3.8 (DARS)
-//! and Phase 3.10 (multi-verifier).
+//! results in order — this is the primitive used by Phase 3.8 (DARS,
+//! see the `dars` module) and the later multi-verifier work.
+
+pub mod dars;
+pub use dars::{run_dars, DarsCandidate, DarsConfig, DarsOutcome};
 
 use agent_tui_llm::{ChatRequest, LlmClient, StreamEvent};
 use agent_tui_protocol::Message;

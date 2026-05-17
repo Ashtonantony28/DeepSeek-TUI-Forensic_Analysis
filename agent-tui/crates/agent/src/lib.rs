@@ -15,8 +15,10 @@
 pub mod auto_test;
 pub mod engine;
 pub mod parser;
+pub mod routing;
 pub mod session;
 
 pub use engine::{Engine, EngineHandle};
 pub use parser::parse_tool_input;
+pub use routing::{classify as classify_prompt, Router, Tier};
 pub use session::Session;

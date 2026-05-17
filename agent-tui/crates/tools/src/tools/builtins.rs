@@ -635,6 +635,68 @@ impl Tool for SemanticSearchTool {
     }
 }
 
+// ---------- remember (cross-session memory — 3.5) ----------
+
+pub struct RememberTool;
+#[async_trait]
+impl Tool for RememberTool {
+    fn name(&self) -> &str { "remember" }
+    fn schema(&self) -> ToolSchema {
+        ToolSchema::new(
+            self.name(),
+            "Record a short lesson learned this session so future sessions can recall it. \
+             Use sparingly — only for durable facts or repeated mistakes worth remembering.",
+            json!({"type":"object","properties":{
+                "topic":{"type":"string","description":"Short slug (e.g. \"rust async\", \"this repo\")"},
+                "lesson":{"type":"string","description":"One- or two-sentence lesson to store."}
+            },"required":["topic","lesson"]}),
+        )
+    }
+    fn requires_approval(&self) -> bool { false }
+    fn is_read_only(&self) -> bool { true }
+    fn is_plan_tool(&self) -> bool { true }
+    async fn execute(&self, args: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
+        let topic = require_str(&args, "topic")?;
+        let lesson = require_str(&args, "lesson")?;
+        ctx.memory
+            .add(topic, lesson)
+            .map_err(|e| ToolError::Other(format!("memory: {e}")))?;
+        Ok(ToolResult::ok(format!("remembered: [{topic}] {lesson}")))
+    }
+}
+
+pub struct RecallTool;
+#[async_trait]
+impl Tool for RecallTool {
+    fn name(&self) -> &str { "recall" }
+    fn schema(&self) -> ToolSchema {
+        ToolSchema::new(
+            self.name(),
+            "Search cross-session memory for lessons relevant to a query.",
+            json!({"type":"object","properties":{
+                "query":{"type":"string"},
+                "k":{"type":"integer","minimum":1,"maximum":20}
+            },"required":["query"]}),
+        )
+    }
+    fn requires_approval(&self) -> bool { false }
+    fn is_read_only(&self) -> bool { true }
+    fn is_plan_tool(&self) -> bool { true }
+    async fn execute(&self, args: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
+        let q = require_str(&args, "query")?;
+        let k = args.get("k").and_then(Value::as_u64).unwrap_or(5).min(20) as usize;
+        let hits = ctx.memory.retrieve(q, k);
+        if hits.is_empty() {
+            return Ok(ToolResult::ok("(no relevant lessons)".to_string()));
+        }
+        let mut body = format!("{} lesson(s):\n", hits.len());
+        for (i, l) in hits.iter().enumerate() {
+            body.push_str(&format!("  {}. [{}] {}\n", i + 1, l.topic, l.lesson));
+        }
+        Ok(ToolResult::ok(body))
+    }
+}
+
 // ---------- update_plan (Plan-mode planning tool) ----------
 
 pub struct UpdatePlanTool;

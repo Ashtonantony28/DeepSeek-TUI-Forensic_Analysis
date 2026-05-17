@@ -1,6 +1,6 @@
 use agent_tui_agent::{Engine, EngineHandle, Session};
 use agent_tui_llm::LlmClient;
-use agent_tui_protocol::{AppMode, DeltaChannel, Event, Op, Provider};
+use agent_tui_protocol::{AppMode, DeltaChannel, Event, Op, PlanItem, Provider};
 use agent_tui_tools::ToolRegistry;
 use camino::Utf8PathBuf;
 use crossterm::event::{
@@ -27,6 +27,9 @@ pub struct App {
     pub palette_input: String,
     pub context_used_ratio: f32,
     pub session_cost_usd: f64,
+    /// 3.7 — current plan rendered in the side panel.
+    pub plan_goal: Option<String>,
+    pub plan_items: Vec<PlanItem>,
 }
 
 pub enum TranscriptEntry {
@@ -52,6 +55,8 @@ impl App {
             palette_input: String::new(),
             context_used_ratio: 0.0,
             session_cost_usd: 0.0,
+            plan_goal: None,
+            plan_items: Vec::new(),
         }
     }
 
@@ -75,11 +80,40 @@ impl App {
     }
 }
 
+/// Knobs the CLI uses to thread `Extensions` config flags through to the
+/// engine. Defaults match `Extensions::default()` so passing
+/// `EngineKnobs::default()` keeps the historic behaviour.
+#[derive(Debug, Clone)]
+pub struct EngineKnobs {
+    pub checkpoint_enabled: bool,
+    pub auto_test_enabled: bool,
+    pub memory_enabled: bool,
+    pub routing_enabled: bool,
+    pub plan_blocks_enabled: bool,
+    pub dars_enabled: bool,
+    pub dars_verifier_count: usize,
+}
+
+impl Default for EngineKnobs {
+    fn default() -> Self {
+        Self {
+            checkpoint_enabled: true,
+            auto_test_enabled: true,
+            memory_enabled: true,
+            routing_enabled: false,
+            plan_blocks_enabled: true,
+            dars_enabled: true,
+            dars_verifier_count: 3,
+        }
+    }
+}
+
 pub async fn run_tui(
     llm: Arc<dyn LlmClient>,
     workspace_root: Utf8PathBuf,
     model: String,
     yolo: bool,
+    knobs: EngineKnobs,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let session = Session::new(model.clone());
     let session_id = session.id.0.clone();
@@ -87,7 +121,14 @@ pub async fn run_tui(
     ctx.yolo = yolo;
     ToolRegistry::enable_hybrid_retrieval(&mut ctx).await;
     let provider = llm.provider();
-    let engine = Engine::new(session, llm.clone(), Arc::new(reg), Arc::new(ctx));
+    let mut engine = Engine::new(session, llm.clone(), Arc::new(reg), Arc::new(ctx));
+    engine.checkpoint_enabled = knobs.checkpoint_enabled;
+    engine.auto_test_enabled = knobs.auto_test_enabled;
+    engine.memory_enabled = knobs.memory_enabled;
+    engine.routing_enabled = knobs.routing_enabled;
+    engine.plan_blocks_enabled = knobs.plan_blocks_enabled;
+    engine.dars_enabled = knobs.dars_enabled;
+    engine.dars_verifier_count = knobs.dars_verifier_count;
     let handle = engine.spawn();
 
     enable_raw_mode()?;
@@ -155,6 +196,15 @@ async fn event_loop(
                 Event::RiskBandChanged { .. } => {}
                 Event::ApprovalRequest { .. } => {
                     app.status = "approval required".into();
+                }
+                Event::PlanUpdated { goal, items, .. } => {
+                    app.plan_goal = Some(goal);
+                    app.plan_items = items;
+                }
+                Event::DarsResult { winner_index, branch_count, votes } => {
+                    app.transcript.push(TranscriptEntry::System(format!(
+                        "dars: winner=[{winner_index}] of {branch_count} branches, votes={votes:?}"
+                    )));
                 }
                 Event::Error { message } => app.status = format!("error: {message}"),
             }

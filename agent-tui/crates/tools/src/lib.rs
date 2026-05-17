@@ -6,12 +6,14 @@
 //! returns an error to the model with the parse error position.
 
 pub mod checkpoint;
+pub mod memory;
 pub mod registry;
 pub mod schema;
 pub mod syntax;
 pub mod tools;
 
 pub use checkpoint::{CheckpointError, CheckpointMeta, CheckpointStore};
+pub use memory::{Lesson, MemoryError, MemoryStore};
 pub use registry::{ToolContext, ToolRegistry};
 pub use schema::ToolSchema;
 pub use tools::{Tool, ToolError, ToolResult};

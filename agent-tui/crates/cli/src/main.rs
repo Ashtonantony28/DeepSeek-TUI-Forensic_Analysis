@@ -3,7 +3,7 @@ use agent_tui_cli::{build_client, build_mock_client};
 use agent_tui_config::{save_user, user_config_path, CliOverrides, Config};
 use agent_tui_llm::{ChatRequest, LlmClient};
 use agent_tui_protocol::{AppMode, Op, Provider};
-use agent_tui_tui::run_tui;
+use agent_tui_tui::{run_tui, EngineKnobs};
 use anyhow::{anyhow, Context, Result};
 use camino::Utf8PathBuf;
 use clap::{Parser, Subcommand};
@@ -273,7 +273,8 @@ async fn cmd_oneshot(prompt: String, cfg: &Config, workspace: Utf8PathBuf) -> Re
     let (reg, mut ctx) = ToolRegistry::with_builtins(workspace);
     ctx.yolo = cfg.yolo || std::env::var("AGENT_TUI_YOLO").is_ok();
     ToolRegistry::enable_hybrid_retrieval(&mut ctx).await;
-    let engine = Engine::new(session, client, Arc::new(reg), Arc::new(ctx));
+    let mut engine = Engine::new(session, client, Arc::new(reg), Arc::new(ctx));
+    apply_extensions(&mut engine, cfg);
     let h = engine.spawn();
     h.send(Op::Submit {
         content: prompt,
@@ -322,7 +323,16 @@ async fn cmd_interactive(cfg: &Config, workspace: Utf8PathBuf) -> Result<()> {
     } else {
         build_client(provider, cfg)
     };
-    run_tui(client, workspace, model, cfg.yolo)
+    let knobs = EngineKnobs {
+        checkpoint_enabled: cfg.extensions.checkpoint_enabled,
+        auto_test_enabled: cfg.extensions.auto_test,
+        memory_enabled: cfg.extensions.memory_enabled,
+        routing_enabled: cfg.extensions.routing == "auto",
+        plan_blocks_enabled: cfg.extensions.plan_blocks,
+        dars_enabled: cfg.extensions.dars_branching,
+        dars_verifier_count: cfg.extensions.verifier_count as usize,
+    };
+    run_tui(client, workspace, model, cfg.yolo, knobs)
         .await
         .map_err(|e| anyhow!("tui: {e}"))
 }
@@ -363,11 +373,13 @@ async fn serve_http(addr: String, cfg: &Config, workspace: Utf8PathBuf) -> Resul
     };
     let listener = TcpListener::bind(&addr).await.context("bind")?;
     eprintln!("agent-tui http+sse listening on {addr}");
+    let ext = cfg.extensions.clone();
     loop {
         let (mut sock, _peer) = listener.accept().await?;
         let client = client.clone();
         let model = model.clone();
         let workspace = workspace.clone();
+        let ext = ext.clone();
         tokio::spawn(async move {
             let (rd, mut wr) = sock.split();
             let mut br = BufReader::new(rd);
@@ -393,7 +405,14 @@ async fn serve_http(addr: String, cfg: &Config, workspace: Utf8PathBuf) -> Resul
             use agent_tui_tools::ToolRegistry;
             let session = Session::new(model);
             let (reg, ctx) = ToolRegistry::with_builtins(workspace);
-            let engine = Engine::new(session, client, Arc::new(reg), Arc::new(ctx));
+            let mut engine = Engine::new(session, client, Arc::new(reg), Arc::new(ctx));
+            engine.checkpoint_enabled = ext.checkpoint_enabled;
+            engine.auto_test_enabled = ext.auto_test;
+            engine.memory_enabled = ext.memory_enabled;
+            engine.routing_enabled = ext.routing == "auto";
+            engine.plan_blocks_enabled = ext.plan_blocks;
+            engine.dars_enabled = ext.dars_branching;
+            engine.dars_verifier_count = ext.verifier_count as usize;
             let h = engine.spawn();
             let _ = h
                 .send(Op::Submit {
@@ -433,3 +452,17 @@ fn _force_request() -> ChatRequest {
 
 #[allow(dead_code)]
 fn _force_llm(_: Arc<dyn LlmClient>) {}
+
+/// Map the [extensions] config block onto the engine flags. Phase 3.5–3.8
+/// extensions are toggled here so every entrypoint (oneshot, interactive,
+/// http, acp) gets the same behaviour.
+fn apply_extensions(engine: &mut agent_tui_agent::Engine, cfg: &Config) {
+    let ext = &cfg.extensions;
+    engine.checkpoint_enabled = ext.checkpoint_enabled;
+    engine.auto_test_enabled = ext.auto_test;
+    engine.memory_enabled = ext.memory_enabled;
+    engine.routing_enabled = ext.routing == "auto";
+    engine.plan_blocks_enabled = ext.plan_blocks;
+    engine.dars_enabled = ext.dars_branching;
+    engine.dars_verifier_count = ext.verifier_count as usize;
+}
