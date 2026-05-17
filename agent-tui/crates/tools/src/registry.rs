@@ -1,5 +1,6 @@
 use crate::checkpoint::CheckpointStore;
 use crate::memory::MemoryStore;
+use crate::tools::repl::ReplRegistry;
 use crate::tools::Tool;
 use agent_tui_execpolicy::{ApprovalGate, EgressPolicy};
 use agent_tui_protocol::AppMode;
@@ -19,6 +20,9 @@ pub struct ToolContext {
     pub retriever: Option<Arc<dyn agent_tui_retrieval::Retriever>>,
     /// Cross-session memory store (3.5). Always present; `disabled()` is a no-op.
     pub memory: Arc<MemoryStore>,
+    /// REPL session registry (3.10). `None` when `repl_tools` is disabled
+    /// — the `repl_*` tools degrade to `NotAvailable` in that case.
+    pub repl: Option<Arc<ReplRegistry>>,
 }
 
 impl ToolContext {
@@ -34,6 +38,7 @@ impl ToolContext {
             checkpoints,
             retriever: None,
             memory,
+            repl: None,
         }
     }
 }
@@ -78,6 +83,19 @@ impl ToolRegistry {
         .prepare()
         .await;
         ctx.retriever = Some(Arc::new(retriever));
+    }
+
+    /// 3.10 — opt-in registration of the REPL tool surface. Caller is
+    /// responsible for only calling this when `Extensions::repl_tools`
+    /// is true.
+    pub fn enable_repl_tools(&mut self, ctx: &mut ToolContext) {
+        use crate::tools::repl::{ReplCloseTool, ReplEvalTool, ReplOpenTool};
+        if ctx.repl.is_none() {
+            ctx.repl = Some(Arc::new(ReplRegistry::new()));
+        }
+        self.register(Arc::new(ReplOpenTool));
+        self.register(Arc::new(ReplEvalTool));
+        self.register(Arc::new(ReplCloseTool));
     }
 
     pub fn with_builtins(workspace_root: Utf8PathBuf) -> (Self, ToolContext) {

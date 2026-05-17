@@ -1,4 +1,5 @@
 pub mod builtins;
+pub mod repl;
 
 use crate::registry::ToolContext;
 use crate::schema::ToolSchema;

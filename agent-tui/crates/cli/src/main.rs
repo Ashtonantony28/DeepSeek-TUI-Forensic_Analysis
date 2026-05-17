@@ -270,9 +270,12 @@ async fn cmd_oneshot(prompt: String, cfg: &Config, workspace: Utf8PathBuf) -> Re
     use agent_tui_agent::{Engine, Session};
     use agent_tui_tools::ToolRegistry;
     let session = Session::new(model);
-    let (reg, mut ctx) = ToolRegistry::with_builtins(workspace);
+    let (mut reg, mut ctx) = ToolRegistry::with_builtins(workspace);
     ctx.yolo = cfg.yolo || std::env::var("AGENT_TUI_YOLO").is_ok();
     ToolRegistry::enable_hybrid_retrieval(&mut ctx).await;
+    if cfg.extensions.repl_tools {
+        reg.enable_repl_tools(&mut ctx);
+    }
     let mut engine = Engine::new(session, client, Arc::new(reg), Arc::new(ctx));
     apply_extensions(&mut engine, cfg);
     let h = engine.spawn();
@@ -332,6 +335,7 @@ async fn cmd_interactive(cfg: &Config, workspace: Utf8PathBuf) -> Result<()> {
         dars_enabled: cfg.extensions.dars_branching,
         dars_verifier_count: cfg.extensions.verifier_count as usize,
         compaction_enabled: cfg.extensions.compaction_enabled,
+        repl_tools_enabled: cfg.extensions.repl_tools,
     };
     run_tui(client, workspace, model, cfg.yolo, knobs)
         .await
@@ -405,7 +409,10 @@ async fn serve_http(addr: String, cfg: &Config, workspace: Utf8PathBuf) -> Resul
             use agent_tui_agent::{Engine, Session};
             use agent_tui_tools::ToolRegistry;
             let session = Session::new(model);
-            let (reg, ctx) = ToolRegistry::with_builtins(workspace);
+            let (mut reg, mut ctx) = ToolRegistry::with_builtins(workspace);
+            if ext.repl_tools {
+                reg.enable_repl_tools(&mut ctx);
+            }
             let mut engine = Engine::new(session, client, Arc::new(reg), Arc::new(ctx));
             engine.checkpoint_enabled = ext.checkpoint_enabled;
             engine.auto_test_enabled = ext.auto_test;

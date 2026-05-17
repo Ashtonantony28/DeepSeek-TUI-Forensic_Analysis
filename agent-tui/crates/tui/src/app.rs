@@ -93,6 +93,7 @@ pub struct EngineKnobs {
     pub dars_enabled: bool,
     pub dars_verifier_count: usize,
     pub compaction_enabled: bool,
+    pub repl_tools_enabled: bool,
 }
 
 impl Default for EngineKnobs {
@@ -106,6 +107,7 @@ impl Default for EngineKnobs {
             dars_enabled: true,
             dars_verifier_count: 3,
             compaction_enabled: true,
+            repl_tools_enabled: false,
         }
     }
 }
@@ -119,9 +121,12 @@ pub async fn run_tui(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let session = Session::new(model.clone());
     let session_id = session.id.0.clone();
-    let (reg, mut ctx) = ToolRegistry::with_builtins(workspace_root.clone());
+    let (mut reg, mut ctx) = ToolRegistry::with_builtins(workspace_root.clone());
     ctx.yolo = yolo;
     ToolRegistry::enable_hybrid_retrieval(&mut ctx).await;
+    if knobs.repl_tools_enabled {
+        reg.enable_repl_tools(&mut ctx);
+    }
     let provider = llm.provider();
     let mut engine = Engine::new(session, llm.clone(), Arc::new(reg), Arc::new(ctx));
     engine.checkpoint_enabled = knobs.checkpoint_enabled;
