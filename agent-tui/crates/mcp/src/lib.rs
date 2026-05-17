@@ -40,7 +40,9 @@ pub struct McpServerConfig {
     pub enabled: bool,
 }
 
-fn default_true() -> bool { true }
+fn default_true() -> bool {
+    true
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct McpToolDescriptor {
@@ -51,7 +53,9 @@ pub struct McpToolDescriptor {
 }
 
 impl McpToolDescriptor {
-    pub fn qualified_name(&self) -> String { format!("{}:{}", self.server_name, self.tool_name) }
+    pub fn qualified_name(&self) -> String {
+        format!("{}:{}", self.server_name, self.tool_name)
+    }
 }
 
 #[async_trait]
@@ -90,12 +94,19 @@ impl StdioMcpClient {
             reader,
             next_id: AtomicU64::new(1),
         }));
-        let me = Self { inner, server_name: cfg.name.clone() };
-        me.send_request("initialize", json!({
-            "protocolVersion": "2024-11-05",
-            "capabilities": {},
-            "clientInfo": { "name": "agent-tui", "version": env!("CARGO_PKG_VERSION") }
-        })).await?;
+        let me = Self {
+            inner,
+            server_name: cfg.name.clone(),
+        };
+        me.send_request(
+            "initialize",
+            json!({
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": { "name": "agent-tui", "version": env!("CARGO_PKG_VERSION") }
+            }),
+        )
+        .await?;
         Ok(me)
     }
 
@@ -136,8 +147,15 @@ impl McpManagedClient for StdioMcpClient {
         for t in arr {
             out.push(McpToolDescriptor {
                 server_name: self.server_name.clone(),
-                tool_name: t.get("name").and_then(Value::as_str).unwrap_or("").to_string(),
-                description: t.get("description").and_then(Value::as_str).map(String::from),
+                tool_name: t
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string(),
+                description: t
+                    .get("description")
+                    .and_then(Value::as_str)
+                    .map(String::from),
                 input_schema: t.get("inputSchema").cloned().unwrap_or(json!({})),
             });
         }
@@ -145,7 +163,8 @@ impl McpManagedClient for StdioMcpClient {
     }
 
     async fn call_tool(&self, name: &str, args: Value) -> Result<Value, McpError> {
-        self.send_request("tools/call", json!({ "name": name, "arguments": args })).await
+        self.send_request("tools/call", json!({ "name": name, "arguments": args }))
+            .await
     }
 }
 
@@ -156,7 +175,9 @@ pub struct McpManager {
 }
 
 impl McpManager {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     pub fn register(&mut self, cfg: McpServerConfig, client: Arc<dyn McpManagedClient>) {
         self.clients.insert(cfg.name.clone(), client);
@@ -184,7 +205,9 @@ impl McpManager {
     ) -> Vec<(String, McpError)> {
         let mut failed: Vec<(String, McpError)> = Vec::new();
         for cfg in cfgs {
-            if !cfg.enabled { continue; }
+            if !cfg.enabled {
+                continue;
+            }
             match StdioMcpClient::spawn(&cfg).await {
                 Ok(c) => self.register(cfg, Arc::new(c)),
                 Err(e) => failed.push((cfg.name.clone(), e)),
@@ -195,7 +218,7 @@ impl McpManager {
 
     pub async fn list_all_tools(&self) -> Result<Vec<McpToolDescriptor>, McpError> {
         let mut out = Vec::new();
-        for (_, c) in &self.clients {
+        for c in self.clients.values() {
             let mut t = c.list_tools().await?;
             out.append(&mut t);
         }
@@ -213,8 +236,8 @@ impl McpManager {
     /// Load `~/.agent-tui/mcp.toml` or a given path.
     pub fn load_config(path: &Utf8PathBuf) -> Result<Vec<McpServerConfig>, McpError> {
         let raw = std::fs::read_to_string(path.as_std_path())?;
-        let table: HashMap<String, McpServerConfig> = toml::from_str(&raw)
-            .map_err(|e| McpError::Rpc(format!("toml: {e}")))?;
+        let table: HashMap<String, McpServerConfig> =
+            toml::from_str(&raw).map_err(|e| McpError::Rpc(format!("toml: {e}")))?;
         Ok(table.into_values().collect())
     }
 }
@@ -236,7 +259,11 @@ mod tests {
             }])
         }
         async fn call_tool(&self, name: &str, _args: Value) -> Result<Value, McpError> {
-            if name == "ping" { Ok(json!("pong")) } else { Err(McpError::Rpc("nope".into())) }
+            if name == "ping" {
+                Ok(json!("pong"))
+            } else {
+                Err(McpError::Rpc("nope".into()))
+            }
         }
     }
 

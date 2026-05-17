@@ -92,8 +92,15 @@ async fn plan_blocks_disabled_suppresses_event() {
     .unwrap();
     let mut saw_plan = false;
     while let Some(ev) = h.next_event().await {
-        if matches!(ev, Event::PlanUpdated { .. }) { saw_plan = true; }
-        if matches!(ev, Event::TurnComplete { .. }) { break; }
+        if matches!(ev, Event::PlanUpdated { .. }) {
+            saw_plan = true;
+        }
+        if matches!(ev, Event::TurnComplete { .. }) {
+            break;
+        }
     }
-    assert!(!saw_plan, "PlanUpdated fired despite plan_blocks_enabled=false");
+    assert!(
+        !saw_plan,
+        "PlanUpdated fired despite plan_blocks_enabled=false"
+    );
 }

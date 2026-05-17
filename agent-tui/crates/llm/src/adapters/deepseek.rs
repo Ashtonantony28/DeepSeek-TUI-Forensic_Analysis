@@ -46,5 +46,7 @@ impl LlmClient for DeepSeekClient {
             },
         ])
     }
-    fn provider(&self) -> Provider { Provider::DeepSeek }
+    fn provider(&self) -> Provider {
+        Provider::DeepSeek
+    }
 }

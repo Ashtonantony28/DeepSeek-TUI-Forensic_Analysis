@@ -129,8 +129,7 @@ pub fn synthetic_instances() -> Vec<SweInstance> {
             repo: "example/repo-b".into(),
             base_commit: "bbbbbbb".into(),
             issue_title: "Comparison inverted in validator".into(),
-            issue_body: "The `is_valid` function incorrectly rejects valid input."
-                .into(),
+            issue_body: "The `is_valid` function incorrectly rejects valid input.".into(),
             reference_patch: SYNTHETIC_PATCH_B.into(),
             test_patch: SYNTHETIC_TEST_B.into(),
             fail_to_pass: vec!["tests/test_validator.py::test_valid_input".into()],

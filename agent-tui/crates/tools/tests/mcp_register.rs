@@ -1,8 +1,6 @@
 //! 3.12 — `ToolRegistry::register_mcp_tools` adds qualified adapters.
 
-use agent_tui_mcp::{
-    McpError, McpManagedClient, McpManager, McpServerConfig, McpToolDescriptor,
-};
+use agent_tui_mcp::{McpError, McpManagedClient, McpManager, McpServerConfig, McpToolDescriptor};
 use agent_tui_tools::{ToolContext, ToolRegistry};
 use async_trait::async_trait;
 use camino::Utf8PathBuf;
@@ -47,7 +45,12 @@ async fn register_mcp_tools_adds_qualified_adapters() {
         env: HashMap::new(),
         enabled: true,
     };
-    mgr.register(cfg, Arc::new(FakeClient { server: "svc".into() }));
+    mgr.register(
+        cfg,
+        Arc::new(FakeClient {
+            server: "svc".into(),
+        }),
+    );
 
     let (mut reg, _ctx) = ToolRegistry::with_builtins(Utf8PathBuf::from("/tmp"));
     let n = reg.register_mcp_tools(&mgr).await.unwrap();

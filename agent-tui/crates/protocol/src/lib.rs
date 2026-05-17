@@ -121,8 +121,12 @@ pub struct ModelInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ContentBlock {
-    Text { text: String },
-    Thinking { text: String },
+    Text {
+        text: String,
+    },
+    Thinking {
+        text: String,
+    },
     ToolUse {
         id: ToolCallId,
         name: String,
@@ -133,7 +137,10 @@ pub enum ContentBlock {
         content: String,
         is_error: bool,
     },
-    Image { media_type: String, data: String },
+    Image {
+        media_type: String,
+        data: String,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -300,7 +307,9 @@ pub struct PlanItem {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "event", rename_all = "snake_case")]
 pub enum Event {
-    TurnStarted { turn_id: TurnId },
+    TurnStarted {
+        turn_id: TurnId,
+    },
     Delta {
         turn_id: TurnId,
         channel: DeltaChannel,
@@ -347,7 +356,9 @@ pub enum Event {
         before_tokens: u32,
         after_tokens: u32,
     },
-    TurnComplete { turn_id: TurnId },
+    TurnComplete {
+        turn_id: TurnId,
+    },
     TurnAborted {
         turn_id: TurnId,
         reason: String,
@@ -366,7 +377,9 @@ pub enum Event {
         branch_count: usize,
         votes: Vec<usize>,
     },
-    Error { message: String },
+    Error {
+        message: String,
+    },
 }
 
 // =====================================================================

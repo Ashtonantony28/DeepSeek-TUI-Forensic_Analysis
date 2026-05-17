@@ -57,9 +57,15 @@ fn render_transcript(messages: &[Message]) -> String {
                     out.push_str(name);
                     out.push_str(")\n");
                 }
-                ContentBlock::ToolResult { is_error, content, .. } => {
+                ContentBlock::ToolResult {
+                    is_error, content, ..
+                } => {
                     out.push_str(prefix);
-                    out.push_str(if *is_error { " (tool_error): " } else { " (tool_result): " });
+                    out.push_str(if *is_error {
+                        " (tool_error): "
+                    } else {
+                        " (tool_result): "
+                    });
                     out.push_str(content);
                     out.push('\n');
                 }
@@ -93,15 +99,20 @@ pub struct FlashCompactor {
 
 impl FlashCompactor {
     pub fn new(llm: Arc<dyn LlmClient>, model: impl Into<String>) -> Self {
-        Self { llm, model: model.into() }
+        Self {
+            llm,
+            model: model.into(),
+        }
     }
 
     pub async fn summarize_seam(&self, head: &[Message]) -> Result<String, String> {
-        self.summarize_with(SEAM_PROMPT, head, DEFAULT_MAX_OUTPUT_TOKENS).await
+        self.summarize_with(SEAM_PROMPT, head, DEFAULT_MAX_OUTPUT_TOKENS)
+            .await
     }
 
     pub async fn summarize_cycle(&self, head: &[Message]) -> Result<String, String> {
-        self.summarize_with(CYCLE_PROMPT, head, DEFAULT_MAX_OUTPUT_TOKENS).await
+        self.summarize_with(CYCLE_PROMPT, head, DEFAULT_MAX_OUTPUT_TOKENS)
+            .await
     }
 
     async fn summarize_with(
@@ -140,15 +151,23 @@ mod tests {
     use super::*;
     use agent_tui_llm::MockClient;
 
-    fn user(s: &str) -> Message { Message::user_text(s) }
-    fn asst(s: &str) -> Message { Message::assistant_text(s) }
+    fn user(s: &str) -> Message {
+        Message::user_text(s)
+    }
+    fn asst(s: &str) -> Message {
+        Message::assistant_text(s)
+    }
 
     #[tokio::test]
     async fn seam_summary_round_trip() {
         let mock = Arc::new(MockClient::new());
         mock.push_text("Refactored parser; updated tests; left lint warning in src/foo.rs");
         let c = FlashCompactor::new(mock as Arc<dyn LlmClient>, "mock-flash");
-        let head = vec![user("hi"), asst("hello"), user("please refactor src/foo.rs")];
+        let head = vec![
+            user("hi"),
+            asst("hello"),
+            user("please refactor src/foo.rs"),
+        ];
         let out = c.summarize_seam(&head).await.unwrap();
         assert!(out.contains("foo.rs"));
     }
@@ -158,7 +177,10 @@ mod tests {
         let mock = Arc::new(MockClient::new());
         mock.push_text("Goal: build agent-tui. Decided: 14 crates. TODO: ship eval harness.");
         let c = FlashCompactor::new(mock as Arc<dyn LlmClient>, "mock-flash");
-        let head = vec![user("scope?"), asst("we're building agent-tui in 14 crates")];
+        let head = vec![
+            user("scope?"),
+            asst("we're building agent-tui in 14 crates"),
+        ];
         let out = c.summarize_cycle(&head).await.unwrap();
         assert!(out.contains("agent-tui"));
         assert!(out.contains("crates"));

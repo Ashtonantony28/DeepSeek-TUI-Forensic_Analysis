@@ -112,7 +112,10 @@ struct HitKey {
 
 impl From<&RetrievalHit> for HitKey {
     fn from(h: &RetrievalHit) -> Self {
-        Self { path: h.path.to_string(), line: h.line }
+        Self {
+            path: h.path.to_string(),
+            line: h.line,
+        }
     }
 }
 
@@ -128,7 +131,10 @@ fn rank_lexical(root: &Utf8Path, query: &str, top_k: usize) -> Vec<RetrievalHit>
         return Vec::new();
     }
     let mut out: Vec<(f32, RetrievalHit)> = Vec::new();
-    for dent in WalkBuilder::new(root.as_std_path()).build().filter_map(Result::ok) {
+    for dent in WalkBuilder::new(root.as_std_path())
+        .build()
+        .filter_map(Result::ok)
+    {
         if !dent.file_type().is_some_and(|t| t.is_file()) {
             continue;
         }
@@ -137,12 +143,18 @@ fn rank_lexical(root: &Utf8Path, query: &str, top_k: usize) -> Vec<RetrievalHit>
             .strip_prefix(root.as_std_path())
             .ok()
             .and_then(|p| Utf8PathBuf::from_path_buf(p.to_path_buf()).ok())
-        else { continue };
-        let Ok(body) = std::fs::read_to_string(dent.path()) else { continue };
+        else {
+            continue;
+        };
+        let Ok(body) = std::fs::read_to_string(dent.path()) else {
+            continue;
+        };
         for chunk in chunk_file(&rel, &body) {
             let lower = chunk.text.to_lowercase();
             let score = terms.iter().filter(|t| lower.contains(t.as_str())).count() as f32;
-            if score == 0.0 { continue; }
+            if score == 0.0 {
+                continue;
+            }
             let snippet = chunk_summary(&chunk);
             out.push((
                 score,
@@ -164,8 +176,7 @@ fn rank_graph(g: &RepoGraph, query: &str, top_k: usize) -> Vec<RetrievalHit> {
         return Vec::new();
     }
     let scores = graph::pagerank(g, Some(query), 25);
-    let mut indexed: Vec<(usize, f32)> =
-        scores.iter().enumerate().map(|(i, s)| (i, *s)).collect();
+    let mut indexed: Vec<(usize, f32)> = scores.iter().enumerate().map(|(i, s)| (i, *s)).collect();
     indexed.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
     indexed
         .into_iter()
@@ -186,11 +197,15 @@ async fn rank_embeddings(
     top_k: usize,
 ) -> Vec<RetrievalHit> {
     let guard = idx.read().await;
-    let Some(idx) = guard.as_ref() else { return Vec::new() };
+    let Some(idx) = guard.as_ref() else {
+        return Vec::new();
+    };
     if idx.chunks.is_empty() {
         return Vec::new();
     }
-    let Ok(q_vec) = client.embed(query).await else { return Vec::new() };
+    let Ok(q_vec) = client.embed(query).await else {
+        return Vec::new();
+    };
     let mut scored: Vec<(f32, &crate::embeddings::EmbeddedChunk)> = idx
         .chunks
         .iter()

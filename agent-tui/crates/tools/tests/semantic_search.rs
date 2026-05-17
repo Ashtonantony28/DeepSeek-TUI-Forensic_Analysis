@@ -46,5 +46,8 @@ async fn semantic_search_errors_when_retriever_absent() {
     let res = SemanticSearchTool
         .execute(json!({"query": "anything"}), &ctx)
         .await;
-    assert!(res.is_err(), "no retriever -> tool should signal NotAvailable");
+    assert!(
+        res.is_err(),
+        "no retriever -> tool should signal NotAvailable"
+    );
 }

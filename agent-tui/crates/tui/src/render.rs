@@ -28,8 +28,11 @@ fn draw_status(f: &mut Frame, area: Rect, app: &App) {
     let mode = format!("{:?}", app.mode);
     let line = Line::from(vec![
         Span::styled(
-            format!(" agent-tui "),
-            Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD),
+            " agent-tui ".to_string(),
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
         ),
         Span::raw(format!(
             " mode={mode}  provider={}  model={}  ctx={:.0}%  cost=${:.4}  {}",
@@ -58,19 +61,34 @@ fn draw_transcript(f: &mut Frame, area: Rect, app: &App) {
         match e {
             TranscriptEntry::User(s) => {
                 lines.push(Line::from(vec![
-                    Span::styled("you  ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        "you  ",
+                        Style::default()
+                            .fg(Color::Green)
+                            .add_modifier(Modifier::BOLD),
+                    ),
                     Span::raw(s.clone()),
                 ]));
             }
             TranscriptEntry::AssistantText(s) => {
                 lines.push(Line::from(vec![
-                    Span::styled("ai   ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        "ai   ",
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
+                    ),
                     Span::raw(s.clone()),
                 ]));
             }
             TranscriptEntry::AssistantThinking(s) => {
                 lines.push(Line::from(vec![
-                    Span::styled("think ", Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC)),
+                    Span::styled(
+                        "think ",
+                        Style::default()
+                            .fg(Color::DarkGray)
+                            .add_modifier(Modifier::ITALIC),
+                    ),
                     Span::styled(s.clone(), Style::default().fg(Color::DarkGray)),
                 ]));
             }
@@ -80,7 +98,11 @@ fn draw_transcript(f: &mut Frame, area: Rect, app: &App) {
                     Span::raw(format!("{name}({input})")),
                 ]));
             }
-            TranscriptEntry::ToolResult { name, output, is_error } => {
+            TranscriptEntry::ToolResult {
+                name,
+                output,
+                is_error,
+            } => {
                 let style = if *is_error {
                     Style::default().fg(Color::Red)
                 } else {
@@ -111,10 +133,15 @@ fn draw_side_panel(f: &mut Frame, area: Rect, app: &App) {
     let mut lines: Vec<Line> = Vec::new();
     match &app.plan_goal {
         Some(g) => {
-            lines.push(Line::from(vec![Span::styled(
-                "goal: ",
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
-            ), Span::raw(g.clone())]));
+            lines.push(Line::from(vec![
+                Span::styled(
+                    "goal: ",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(g.clone()),
+            ]));
             lines.push(Line::from(""));
             for (i, item) in app.plan_items.iter().enumerate() {
                 let marker = if item.done { "[x] " } else { "[ ] " };
@@ -141,12 +168,16 @@ fn draw_side_panel(f: &mut Frame, area: Rect, app: &App) {
             )));
         }
     }
-    let para = Paragraph::new(lines).block(block).wrap(Wrap { trim: false });
+    let para = Paragraph::new(lines)
+        .block(block)
+        .wrap(Wrap { trim: false });
     f.render_widget(para, area);
 }
 
 fn draw_composer(f: &mut Frame, area: Rect, app: &App) {
-    let block = Block::default().borders(Borders::ALL).title("compose ↵ to send, Tab cycles mode, Ctrl+K palette, Ctrl+C cancel, Ctrl+D quit");
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title("compose ↵ to send, Tab cycles mode, Ctrl+K palette, Ctrl+C cancel, Ctrl+D quit");
     let para = Paragraph::new(app.composer.as_str()).block(block);
     f.render_widget(para, area);
 }
@@ -154,7 +185,9 @@ fn draw_composer(f: &mut Frame, area: Rect, app: &App) {
 fn draw_palette(f: &mut Frame, area: Rect, app: &App) {
     let r = centered_rect(60, 30, area);
     f.render_widget(Clear, r);
-    let block = Block::default().borders(Borders::ALL).title("command palette");
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title("command palette");
     let para = Paragraph::new(app.palette_input.as_str()).block(block);
     f.render_widget(para, r);
 }

@@ -216,13 +216,15 @@ fn serialize_content(m: &Message) -> Result<Value, LlmError> {
     for block in &m.content {
         match block {
             ContentBlock::Text { text } => out.push(json!({"type":"text","text":text})),
-            ContentBlock::Thinking { text } => {
-                out.push(json!({"type":"thinking","thinking":text}))
-            }
+            ContentBlock::Thinking { text } => out.push(json!({"type":"thinking","thinking":text})),
             ContentBlock::ToolUse { id, name, input } => out.push(json!({
                 "type":"tool_use","id":id.0,"name":name,"input":input
             })),
-            ContentBlock::ToolResult { tool_use_id, content, is_error } => out.push(json!({
+            ContentBlock::ToolResult {
+                tool_use_id,
+                content,
+                is_error,
+            } => out.push(json!({
                 "type":"tool_result",
                 "tool_use_id": tool_use_id.0,
                 "content": content,
@@ -257,10 +259,7 @@ fn translate_event(
                 if let Ok(meta) = serde_json::from_value::<ContentBlockMeta>(b.clone()) {
                     if meta.kind == "tool_use" {
                         let id = ToolCallId(meta.id.unwrap_or_else(|| ToolCallId::new().0));
-                        tool_id_by_index
-                            .lock()
-                            .unwrap()
-                            .insert(index, id.clone());
+                        tool_id_by_index.lock().unwrap().insert(index, id.clone());
                         return vec![Ok(StreamEvent::ToolCallStart {
                             id,
                             name: meta.name.unwrap_or_default(),
@@ -284,7 +283,10 @@ fn translate_event(
                     vec![Ok(StreamEvent::ThinkingDelta(t.to_string()))]
                 }
                 "input_json_delta" => {
-                    let p = delta.get("partial_json").and_then(Value::as_str).unwrap_or("");
+                    let p = delta
+                        .get("partial_json")
+                        .and_then(Value::as_str)
+                        .unwrap_or("");
                     let id = tool_id_by_index.lock().unwrap().get(&index).cloned();
                     if let Some(id) = id {
                         vec![Ok(StreamEvent::ToolCallDelta {
@@ -316,8 +318,14 @@ fn translate_event(
                 .to_string();
             let usage = ev.get("usage").cloned().unwrap_or(Value::Null);
             let u = Usage {
-                input_tokens: usage.get("input_tokens").and_then(Value::as_u64).unwrap_or(0) as u32,
-                output_tokens: usage.get("output_tokens").and_then(Value::as_u64).unwrap_or(0) as u32,
+                input_tokens: usage
+                    .get("input_tokens")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0) as u32,
+                output_tokens: usage
+                    .get("output_tokens")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0) as u32,
                 cache_read_tokens: usage
                     .get("cache_read_input_tokens")
                     .and_then(Value::as_u64)

@@ -140,7 +140,10 @@ fn truncate_for_context(s: &str, max: usize) -> String {
     }
     let head = &s[..max / 2];
     let tail = &s[s.len() - max / 2..];
-    format!("{head}\n... [truncated {} bytes] ...\n{tail}", s.len() - max)
+    format!(
+        "{head}\n... [truncated {} bytes] ...\n{tail}",
+        s.len() - max
+    )
 }
 
 #[cfg(test)]

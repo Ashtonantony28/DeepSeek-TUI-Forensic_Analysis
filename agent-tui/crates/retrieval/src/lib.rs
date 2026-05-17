@@ -12,8 +12,8 @@ pub mod hybrid;
 
 pub use chunker::{chunk_file, CodeChunk};
 pub use embeddings::{
-    build_or_update as build_or_update_embeddings, cosine_similarity, EmbeddedChunk,
-    EmbedError, EmbeddingClient, EmbeddingIndex,
+    build_or_update as build_or_update_embeddings, cosine_similarity, EmbedError, EmbeddedChunk,
+    EmbeddingClient, EmbeddingIndex,
 };
 pub use graph::{build as build_repo_graph, pagerank, RepoGraph};
 pub use hybrid::HybridRetriever;
@@ -41,11 +41,7 @@ pub enum RetrievalError {
 
 #[async_trait]
 pub trait Retriever: Send + Sync {
-    async fn search(
-        &self,
-        query: &str,
-        top_k: usize,
-    ) -> Result<Vec<RetrievalHit>, RetrievalError>;
+    async fn search(&self, query: &str, top_k: usize) -> Result<Vec<RetrievalHit>, RetrievalError>;
 }
 
 pub struct RipgrepRetriever {
@@ -53,7 +49,9 @@ pub struct RipgrepRetriever {
 }
 
 impl RipgrepRetriever {
-    pub fn new(root: Utf8PathBuf) -> Self { Self { root } }
+    pub fn new(root: Utf8PathBuf) -> Self {
+        Self { root }
+    }
 }
 
 #[async_trait]
@@ -63,7 +61,10 @@ impl Retriever for RipgrepRetriever {
         let root = self.root.clone();
         let hits = tokio::task::spawn_blocking(move || {
             let mut out: Vec<RetrievalHit> = Vec::new();
-            for dent in ignore::WalkBuilder::new(root.as_std_path()).build().filter_map(Result::ok) {
+            for dent in ignore::WalkBuilder::new(root.as_std_path())
+                .build()
+                .filter_map(Result::ok)
+            {
                 if !dent.file_type().is_some_and(|t| t.is_file()) {
                     continue;
                 }

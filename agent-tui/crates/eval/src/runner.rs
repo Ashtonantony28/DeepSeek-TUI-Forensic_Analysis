@@ -75,8 +75,7 @@ pub async fn run_eval(config: RunConfig, llm: Arc<dyn LlmClient>) -> Result<Eval
 
     for instance in &instances {
         info!("eval: running instance {}", instance.instance_id);
-        let result =
-            run_instance(instance, &config, llm.clone(), isolation_mode).await;
+        let result = run_instance(instance, &config, llm.clone(), isolation_mode).await;
         results.push(result);
     }
 
@@ -177,7 +176,9 @@ async fn run_single_rollout(
     // Build a retriever rooted at the workspace.
     let retriever = build_retriever(&workspace.root).await;
     let pipeline = HierarchicalPipeline::new(llm, retriever, config.model.clone());
-    let pctx = PipelineContext { workspace_root: workspace.root.clone() };
+    let pctx = PipelineContext {
+        workspace_root: workspace.root.clone(),
+    };
 
     match pipeline.run(&issue, &pctx).await {
         Ok(patch) => (Some(patch.unified_diff), 1),
@@ -240,7 +241,11 @@ async fn run_rtv_rollouts(
 
     let total_turns = summaries.iter().map(|s| s.turns).sum();
     let winner = rtv_vote(summaries, llm, &config.model).await;
-    let patch = if winner.patch.is_empty() { None } else { Some(winner.patch) };
+    let patch = if winner.patch.is_empty() {
+        None
+    } else {
+        Some(winner.patch)
+    };
     (patch, total_turns)
 }
 

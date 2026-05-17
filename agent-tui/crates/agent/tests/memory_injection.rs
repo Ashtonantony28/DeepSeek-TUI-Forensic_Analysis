@@ -15,8 +15,13 @@ async fn lessons_persist_and_are_retrievable() {
     let root = Utf8PathBuf::from_path_buf(td.path().to_path_buf()).unwrap();
     {
         let m = MemoryStore::load(&root);
-        m.add("git", "always create a NEW commit instead of amending").unwrap();
-        m.add("rust", "prefer `if let Some(x) = ... else` over chained matches").unwrap();
+        m.add("git", "always create a NEW commit instead of amending")
+            .unwrap();
+        m.add(
+            "rust",
+            "prefer `if let Some(x) = ... else` over chained matches",
+        )
+        .unwrap();
     }
     let m2 = MemoryStore::load(&root);
     let hits = m2.retrieve("how do I commit in git", 5);
@@ -40,7 +45,12 @@ async fn engine_uses_memory_via_remember_tool() {
     let (reg, mut ctx) = ToolRegistry::with_builtins(root.clone());
     ctx.yolo = true;
     let session = Session::new("mock-model");
-    let engine = Engine::new(session, mock.clone() as Arc<dyn LlmClient>, Arc::new(reg), Arc::new(ctx));
+    let engine = Engine::new(
+        session,
+        mock.clone() as Arc<dyn LlmClient>,
+        Arc::new(reg),
+        Arc::new(ctx),
+    );
     let h = engine.spawn();
     h.send(Op::Submit {
         content: "remember the build rule".into(),
@@ -58,7 +68,7 @@ async fn engine_uses_memory_via_remember_tool() {
 
     // Confirm the lesson reached disk.
     let m = MemoryStore::load(&root);
-    assert!(m.len() >= 1, "remember tool did not persist a lesson");
+    assert!(!m.is_empty(), "remember tool did not persist a lesson");
     let hits = m.retrieve("cargo test build", 5);
     assert!(!hits.is_empty());
 }

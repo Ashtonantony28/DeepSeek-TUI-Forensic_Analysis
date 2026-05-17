@@ -74,19 +74,31 @@ mod tests {
     #[test]
     fn loopback_allowed() {
         let p = EgressPolicy::restrictive();
-        assert!(matches!(p.check_url("http://localhost:8080/x"), EgressVerdict::Allow));
-        assert!(matches!(p.check_url("http://127.0.0.1/"), EgressVerdict::Allow));
+        assert!(matches!(
+            p.check_url("http://localhost:8080/x"),
+            EgressVerdict::Allow
+        ));
+        assert!(matches!(
+            p.check_url("http://127.0.0.1/"),
+            EgressVerdict::Allow
+        ));
     }
 
     #[test]
     fn private_blocked() {
         let p = EgressPolicy::restrictive();
-        assert!(matches!(p.check_url("http://192.168.1.1/x"), EgressVerdict::Block(_)));
+        assert!(matches!(
+            p.check_url("http://192.168.1.1/x"),
+            EgressVerdict::Block(_)
+        ));
     }
 
     #[test]
     fn public_allowed() {
         let p = EgressPolicy::restrictive();
-        assert!(matches!(p.check_url("https://api.anthropic.com/"), EgressVerdict::Allow));
+        assert!(matches!(
+            p.check_url("https://api.anthropic.com/"),
+            EgressVerdict::Allow
+        ));
     }
 }

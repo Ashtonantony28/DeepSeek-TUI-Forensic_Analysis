@@ -1,0 +1,162 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+env:
+  CARGO_TERM_COLOR: always
+  BINARY_NAME: agent-tui
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive: tar.gz
+
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive: tar.gz
+            cross: true
+
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            archive: tar.gz
+
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            archive: tar.gz
+
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            archive: zip
+            binary_suffix: .exe
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross (for aarch64-linux)
+        if: matrix.cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            agent-tui/target
+          key: release-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build binary (native)
+        if: "!matrix.cross"
+        run: cargo build --release --bin agent-tui --target ${{ matrix.target }}
+        working-directory: agent-tui
+
+      - name: Build binary (cross)
+        if: matrix.cross
+        run: cross build --release --bin agent-tui --target ${{ matrix.target }}
+        working-directory: agent-tui
+
+      - name: Determine binary path
+        id: bin_path
+        shell: bash
+        run: |
+          SUFFIX="${{ matrix.binary_suffix }}"
+          echo "path=agent-tui/target/${{ matrix.target }}/release/agent-tui${SUFFIX}" >> "$GITHUB_OUTPUT"
+
+      - name: Package (tar.gz)
+        if: matrix.archive == 'tar.gz'
+        shell: bash
+        run: |
+          TARGET="${{ matrix.target }}"
+          BIN="agent-tui/target/$TARGET/release/agent-tui"
+          STAGING="agent-tui-$TARGET"
+          mkdir "$STAGING"
+          cp "$BIN" "$STAGING/"
+          cp agent-tui/README.md agent-tui/CHANGELOG.md "$STAGING/"
+          tar -czf "${STAGING}.tar.gz" "$STAGING"
+          sha256sum "${STAGING}.tar.gz" > "${STAGING}.tar.gz.sha256"
+          echo "asset=${STAGING}.tar.gz" >> "$GITHUB_OUTPUT"
+          echo "checksum=${STAGING}.tar.gz.sha256" >> "$GITHUB_OUTPUT"
+        id: package_tar
+
+      - name: Package (zip)
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          $TARGET = "${{ matrix.target }}"
+          $BIN    = "agent-tui/target/$TARGET/release/agent-tui.exe"
+          $STAGING = "agent-tui-$TARGET"
+          New-Item -ItemType Directory $STAGING | Out-Null
+          Copy-Item $BIN                   "$STAGING/"
+          Copy-Item agent-tui/README.md    "$STAGING/"
+          Copy-Item agent-tui/CHANGELOG.md "$STAGING/"
+          Compress-Archive -Path "$STAGING" -DestinationPath "${STAGING}.zip"
+          $hash = (Get-FileHash "${STAGING}.zip" -Algorithm SHA256).Hash.ToLower()
+          "$hash  ${STAGING}.zip" | Out-File "${STAGING}.zip.sha256" -Encoding ascii
+          "asset=${STAGING}.zip"         | Out-File -Append $env:GITHUB_OUTPUT -Encoding ascii
+          "checksum=${STAGING}.zip.sha256" | Out-File -Append $env:GITHUB_OUTPUT -Encoding ascii
+        id: package_zip
+
+      - name: Upload artifact (tar.gz)
+        if: matrix.archive == 'tar.gz'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: |
+            ${{ steps.package_tar.outputs.asset }}
+            ${{ steps.package_tar.outputs.checksum }}
+
+      - name: Upload artifact (zip)
+        if: matrix.archive == 'zip'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: |
+            ${{ steps.package_zip.outputs.asset }}
+            ${{ steps.package_zip.outputs.checksum }}
+
+  publish:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Collect release assets
+        id: assets
+        run: |
+          find artifacts -type f | sort
+          echo "All artifacts above."
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "agent-tui ${{ github.ref_name }}"
+          body_path: agent-tui/CHANGELOG.md
+          files: artifacts/**/*
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

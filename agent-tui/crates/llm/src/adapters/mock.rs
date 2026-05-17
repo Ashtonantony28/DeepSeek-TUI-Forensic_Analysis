@@ -13,7 +13,9 @@ pub struct MockClient {
 }
 
 impl Default for MockClient {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MockClient {
@@ -47,7 +49,10 @@ impl MockClient {
         let id = ToolCallId::new();
         let name = name.into();
         self.push_script(vec![
-            StreamEvent::ToolCallStart { id: id.clone(), name: name.clone() },
+            StreamEvent::ToolCallStart {
+                id: id.clone(),
+                name: name.clone(),
+            },
             StreamEvent::ToolCallDelta {
                 id: id.clone(),
                 json_fragment: serde_json::to_string(&args).unwrap(),

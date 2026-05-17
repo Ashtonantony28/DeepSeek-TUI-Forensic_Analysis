@@ -97,7 +97,11 @@ impl CheckpointStore {
     /// `summary` is a short, human-readable label (typically the tool name +
     /// affected path). `turn` is the current turn number, used to filter the
     /// list in the TUI overlay.
-    pub fn create(&self, turn: u32, summary: impl Into<String>) -> Result<CheckpointMeta, CheckpointError> {
+    pub fn create(
+        &self,
+        turn: u32,
+        summary: impl Into<String>,
+    ) -> Result<CheckpointMeta, CheckpointError> {
         if !self.enabled {
             return Err(CheckpointError::Disabled);
         }
@@ -106,23 +110,38 @@ impl CheckpointStore {
         if sha.is_empty() {
             // Nothing to checkpoint (clean tree); use HEAD instead so rollback
             // still has something to refer to.
-            let head = run_git(&self.root, &["rev-parse", "HEAD"]).map_err(|e| {
-                CheckpointError::Git(format!("clean tree and no HEAD: {e}"))
-            })?;
+            let head = run_git(&self.root, &["rev-parse", "HEAD"])
+                .map_err(|e| CheckpointError::Git(format!("clean tree and no HEAD: {e}")))?;
             let sha = head.trim().to_string();
             return self.persist(turn, summary.into(), sha);
         }
         // Make the object permanent (otherwise `git gc` would collect it).
         let label = format!("agent-tui checkpoint turn={turn}");
-        run_git(&self.root, &["update-ref", "refs/agent-tui/last-stash", &sha, ""]).ok();
+        run_git(
+            &self.root,
+            &["update-ref", "refs/agent-tui/last-stash", &sha, ""],
+        )
+        .ok();
         let _ = run_git(
             &self.root,
-            &["tag", "-f", &format!("agent-tui-checkpoint/{sha}"), &sha, "-m", &label],
+            &[
+                "tag",
+                "-f",
+                &format!("agent-tui-checkpoint/{sha}"),
+                &sha,
+                "-m",
+                &label,
+            ],
         );
         self.persist(turn, summary.into(), sha)
     }
 
-    fn persist(&self, turn: u32, summary: String, stash_sha: String) -> Result<CheckpointMeta, CheckpointError> {
+    fn persist(
+        &self,
+        turn: u32,
+        summary: String,
+        stash_sha: String,
+    ) -> Result<CheckpointMeta, CheckpointError> {
         std::fs::create_dir_all(self.dir.as_std_path())?;
         let mut inner = self.inner.lock().unwrap();
         let seq = inner.next_seq;

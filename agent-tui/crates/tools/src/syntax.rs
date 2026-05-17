@@ -68,9 +68,7 @@ fn language_for_path(path: &Utf8Path) -> Option<(tree_sitter::Language, &'static
     match ext.as_str() {
         "rs" => Some((tree_sitter_rust::language(), "rust")),
         "py" => Some((tree_sitter_python::language(), "python")),
-        "js" | "jsx" | "mjs" | "cjs" => {
-            Some((tree_sitter_javascript::language(), "javascript"))
-        }
+        "js" | "jsx" | "mjs" | "cjs" => Some((tree_sitter_javascript::language(), "javascript")),
         "ts" => Some((tree_sitter_typescript::language_typescript(), "typescript")),
         "tsx" => Some((tree_sitter_typescript::language_tsx(), "tsx")),
         "go" => Some((tree_sitter_go::language(), "go")),

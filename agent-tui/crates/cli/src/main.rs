@@ -12,7 +12,11 @@ use std::io::{self, BufRead, Write};
 use std::sync::Arc;
 
 #[derive(Parser, Debug)]
-#[command(name = "agent-tui", version, about = "Multi-provider terminal coding agent")]
+#[command(
+    name = "agent-tui",
+    version,
+    about = "Multi-provider terminal coding agent"
+)]
 struct Cli {
     /// Override the provider.
     #[arg(long, global = true)]
@@ -58,9 +62,7 @@ enum Cmd {
         addr: String,
     },
     /// Bypass agent loop and run the hierarchical pipeline (Phase 3.11).
-    Fix {
-        issue: String,
-    },
+    Fix { issue: String },
     /// Rebuild the embedding/retrieval index for the workspace.
     Index {
         /// Skip the embeddings rebuild; just refresh the repo graph.
@@ -142,16 +144,13 @@ async fn main() -> Result<()> {
         model: cli.model.clone(),
         yolo: if cli.yolo { Some(true) } else { None },
     };
-    let cfg = agent_tui_config::load(&workspace, &overrides)
-        .context("loading config")?;
+    let cfg = agent_tui_config::load(&workspace, &overrides).context("loading config")?;
 
     match cli.cmd {
         Some(Cmd::Login { provider, api_key }) => cmd_login(&provider, api_key, cfg).await,
         Some(Cmd::Doctor) => cmd_doctor(&cfg).await,
         Some(Cmd::Models) => cmd_models(&cfg).await,
-        Some(Cmd::Serve { http, acp, addr }) => {
-            cmd_serve(http, acp, addr, &cfg, workspace).await
-        }
+        Some(Cmd::Serve { http, acp, addr }) => cmd_serve(http, acp, addr, &cfg, workspace).await,
         Some(Cmd::Fix { issue }) => cmd_fix(issue, &cfg, workspace).await,
         Some(Cmd::Index { graph_only }) => cmd_index(workspace, graph_only).await,
         Some(Cmd::Mcp { cmd }) => cmd_mcp(cmd, &cfg).await,
@@ -167,8 +166,17 @@ async fn main() -> Result<()> {
             compare,
         }) => {
             cmd_eval(
-                bench, subset, subset_ids, provider, model, scale,
-                time_budget, dry_run, compare, &cfg, workspace,
+                bench,
+                subset,
+                subset_ids,
+                provider,
+                model,
+                scale,
+                time_budget,
+                dry_run,
+                compare,
+                &cfg,
+                workspace,
             )
             .await
         }
@@ -224,11 +232,7 @@ fn resolve_model(cfg: &Config, provider: Provider) -> String {
     }
 }
 
-async fn cmd_login(
-    provider: &str,
-    api_key: Option<String>,
-    mut cfg: Config,
-) -> Result<()> {
+async fn cmd_login(provider: &str, api_key: Option<String>, mut cfg: Config) -> Result<()> {
     let p = parse_provider(provider).ok_or_else(|| anyhow!("unknown provider: {provider}"))?;
     let key = match api_key {
         Some(k) => k,
@@ -240,10 +244,7 @@ async fn cmd_login(
             s.trim().to_string()
         }
     };
-    let entry = cfg
-        .providers
-        .entry(p.as_str().to_string())
-        .or_default();
+    let entry = cfg.providers.entry(p.as_str().to_string()).or_default();
     entry.api_key = Some(key);
     let path = save_user(&cfg).context("writing user config")?;
     println!("saved key for {provider} to {path}");
@@ -270,22 +271,26 @@ async fn cmd_doctor(cfg: &Config) -> Result<()> {
     }
     println!("  tools : git={}", check_bin("git"));
     println!("  default provider: {}", resolve_provider(cfg).as_str());
-    println!("  default model   : {}", resolve_model(cfg, resolve_provider(cfg)));
+    println!(
+        "  default model   : {}",
+        resolve_model(cfg, resolve_provider(cfg))
+    );
     Ok(())
 }
 
 fn check_bin(name: &str) -> &'static str {
     let r = std::process::Command::new(name).arg("--version").output();
-    if r.is_ok() { "ok" } else { "MISSING" }
+    if r.is_ok() {
+        "ok"
+    } else {
+        "MISSING"
+    }
 }
 
 async fn cmd_models(cfg: &Config) -> Result<()> {
     let provider = resolve_provider(cfg);
     let client = build_client(provider, cfg);
-    let models = client
-        .list_models()
-        .await
-        .context("listing models")?;
+    let models = client.list_models().await.context("listing models")?;
     println!("{}:", provider.as_str());
     for m in models {
         println!(
@@ -301,7 +306,9 @@ async fn cmd_models(cfg: &Config) -> Result<()> {
 }
 
 fn load_mcp_servers(cfg: &Config) -> Vec<agent_tui_mcp::McpServerConfig> {
-    let Some(path) = &cfg.mcp_config_path else { return Vec::new() };
+    let Some(path) = &cfg.mcp_config_path else {
+        return Vec::new();
+    };
     match agent_tui_mcp::McpManager::load_config(path) {
         Ok(servers) => servers,
         Err(e) => {
@@ -343,7 +350,11 @@ async fn cmd_mcp(cmd: McpCmd, cfg: &Config) -> Result<()> {
             }
             Ok(())
         }
-        McpCmd::Probe { command, args, name } => {
+        McpCmd::Probe {
+            command,
+            args,
+            name,
+        } => {
             let cfg = McpServerConfig {
                 name: name.clone(),
                 command,
@@ -377,7 +388,18 @@ async fn cmd_fix(issue: String, cfg: &Config, workspace: Utf8PathBuf) -> Result<
     let provider = resolve_provider(cfg);
     let model = resolve_model(cfg, provider);
     let client: Arc<dyn LlmClient> = if std::env::var("AGENT_TUI_MOCK").is_ok() {
-        build_mock_client()
+        let mock = agent_tui_llm::MockClient::new();
+        mock.push_text(
+            "Here is the fix:\n```diff\n\
+             diff --git a/fix.py b/fix.py\n\
+             --- a/fix.py\n+++ b/fix.py\n\
+             @@ -1,3 +1,3 @@\n\
+             -    if x > hi:\n\
+             +    if x >= hi:\n\
+                  return hi\n\
+             ```",
+        );
+        Arc::new(mock) as Arc<dyn LlmClient>
     } else {
         build_client(provider, cfg)
     };
@@ -399,9 +421,18 @@ async fn cmd_fix(issue: String, cfg: &Config, workspace: Utf8PathBuf) -> Result<
     };
 
     let pipeline = HierarchicalPipeline::new(client, retriever, model);
-    let pctx = PipelineContext { workspace_root: workspace };
+    let pctx = PipelineContext {
+        workspace_root: workspace,
+    };
     let patch = pipeline
-        .run(&Issue { title, body, failing_tests: vec![] }, &pctx)
+        .run(
+            &Issue {
+                title,
+                body,
+                failing_tests: vec![],
+            },
+            &pctx,
+        )
         .await
         .map_err(|e| anyhow!("pipeline: {e}"))?;
     println!("{}", patch.unified_diff);
@@ -410,7 +441,8 @@ async fn cmd_fix(issue: String, cfg: &Config, workspace: Utf8PathBuf) -> Result<
 
 async fn cmd_index(workspace: Utf8PathBuf, graph_only: bool) -> Result<()> {
     let g = agent_tui_retrieval::build_repo_graph(&workspace);
-    eprintln!("graph: {} files, {} edges",
+    eprintln!(
+        "graph: {} files, {} edges",
         g.len(),
         g.edges.iter().map(|e| e.len()).sum::<usize>(),
     );
@@ -439,10 +471,7 @@ async fn cmd_oneshot(prompt: String, cfg: &Config, workspace: Utf8PathBuf) -> Re
     let client: Arc<dyn LlmClient> = if std::env::var("AGENT_TUI_MOCK").is_ok() {
         // Prefill the mock so smoke tests see realistic tool + text flow.
         let mock = agent_tui_llm::MockClient::new();
-        mock.push_tool_call(
-            "read_file",
-            serde_json::json!({"path": "README.md"}),
-        );
+        mock.push_tool_call("read_file", serde_json::json!({"path": "README.md"}));
         mock.push_text("(mock summary) README contents read successfully.");
         Arc::new(mock) as Arc<dyn LlmClient>
     } else {
@@ -474,23 +503,28 @@ async fn cmd_oneshot(prompt: String, cfg: &Config, workspace: Utf8PathBuf) -> Re
     let h = engine.spawn();
     h.send(Op::Submit {
         content: prompt,
-        mode: if ctx_yolo() { AppMode::Yolo } else { AppMode::Agent },
+        mode: if ctx_yolo() {
+            AppMode::Yolo
+        } else {
+            AppMode::Agent
+        },
         model: None,
         provider: None,
     })
     .await
     .map_err(|e| anyhow!("send: {e}"))?;
     loop {
-        let Some(ev) = h.next_event().await else { break };
+        let Some(ev) = h.next_event().await else {
+            break;
+        };
         use agent_tui_protocol::Event;
         match ev {
-            Event::Delta { delta, channel, .. } => match channel {
-                agent_tui_protocol::DeltaChannel::Text => {
+            Event::Delta { delta, channel, .. } => {
+                if channel == agent_tui_protocol::DeltaChannel::Text {
                     print!("{delta}");
                     let _ = io::stdout().flush();
                 }
-                _ => {}
-            },
+            }
             Event::ToolCallStarted { name, .. } => {
                 eprintln!("\n[tool: {name}]");
             }
@@ -588,8 +622,12 @@ async fn serve_http(addr: String, cfg: &Config, workspace: Utf8PathBuf) -> Resul
             // Burn through headers until empty line.
             loop {
                 let mut hdr = String::new();
-                if br.read_line(&mut hdr).await.unwrap_or(0) == 0 { break; }
-                if hdr == "\r\n" || hdr == "\n" { break; }
+                if br.read_line(&mut hdr).await.unwrap_or(0) == 0 {
+                    break;
+                }
+                if hdr == "\r\n" || hdr == "\n" {
+                    break;
+                }
             }
             // Phase 2: very small POST /v1/sessions surface. Body: { "prompt": "..." }
             // For Phase 2 the body parsing is best-effort; we just echo
@@ -625,7 +663,9 @@ async fn serve_http(addr: String, cfg: &Config, workspace: Utf8PathBuf) -> Resul
                 })
                 .await;
             loop {
-                let Some(ev) = h.next_event().await else { break };
+                let Some(ev) = h.next_event().await else {
+                    break;
+                };
                 let payload = serde_json::to_string(&ev).unwrap_or_default();
                 let frame = format!("data: {payload}\n\n");
                 if wr.write_all(frame.as_bytes()).await.is_err() {
@@ -644,7 +684,7 @@ async fn serve_http(addr: String, cfg: &Config, workspace: Utf8PathBuf) -> Resul
 /// `cmd_oneshot`'s prelude.
 #[allow(dead_code)]
 async fn _unused_drain(stream: &mut agent_tui_llm::ChatStream) {
-    while let Some(_) = stream.next().await {}
+    while stream.next().await.is_some() {}
 }
 
 #[allow(dead_code)]
@@ -669,21 +709,19 @@ async fn cmd_eval(
     cfg: &Config,
     workspace: Utf8PathBuf,
 ) -> Result<()> {
-    use agent_tui_eval::{compare::compare_runs, output_path, runner::RunConfig, runner::run_eval};
+    use agent_tui_eval::{compare::compare_runs, output_path, runner::run_eval, runner::RunConfig};
 
     // ── Compare mode ──────────────────────────────────────────────────────
     if compare.len() == 2 {
         let run_a: agent_tui_eval::EvalRun = {
             let data = std::fs::read_to_string(&compare[0])
                 .with_context(|| format!("reading {}", compare[0]))?;
-            serde_json::from_str(&data)
-                .with_context(|| format!("parsing {}", compare[0]))?
+            serde_json::from_str(&data).with_context(|| format!("parsing {}", compare[0]))?
         };
         let run_b: agent_tui_eval::EvalRun = {
             let data = std::fs::read_to_string(&compare[1])
                 .with_context(|| format!("reading {}", compare[1]))?;
-            serde_json::from_str(&data)
-                .with_context(|| format!("parsing {}", compare[1]))?
+            serde_json::from_str(&data).with_context(|| format!("parsing {}", compare[1]))?
         };
         let md = compare_runs(&run_a, &run_b);
         println!("{}", md);
@@ -714,8 +752,7 @@ async fn cmd_eval(
         // In dry-run mode, pre-load enough scripted responses so that the
         // "pass" synthetic instance produces a valid diff.
         let mock = agent_tui_llm::MockClient::new();
-        let diff =
-            "Here is the fix:\n```diff\n\
+        let diff = "Here is the fix:\n```diff\n\
              diff --git a/clamp.py b/clamp.py\n\
              --- a/clamp.py\n+++ b/clamp.py\n\
              @@ -3,4 +3,4 @@\n\
@@ -752,9 +789,7 @@ async fn cmd_eval(
         dry_run,
     };
 
-    eprintln!(
-        "agent-tui eval: bench={bench} subset={subset} scale={scale} dry_run={dry_run}"
-    );
+    eprintln!("agent-tui eval: bench={bench} subset={subset} scale={scale} dry_run={dry_run}");
 
     let run = run_eval(run_config, llm)
         .await

@@ -43,7 +43,9 @@ pub struct ReadFileTool;
 
 #[async_trait]
 impl Tool for ReadFileTool {
-    fn name(&self) -> &str { "read_file" }
+    fn name(&self) -> &str {
+        "read_file"
+    }
     fn schema(&self) -> ToolSchema {
         ToolSchema::new(
             self.name(),
@@ -57,8 +59,12 @@ impl Tool for ReadFileTool {
             }),
         )
     }
-    fn requires_approval(&self) -> bool { false }
-    fn is_read_only(&self) -> bool { true }
+    fn requires_approval(&self) -> bool {
+        false
+    }
+    fn is_read_only(&self) -> bool {
+        true
+    }
 
     async fn execute(&self, args: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
         let path = require_str(&args, "path")?;
@@ -74,7 +80,9 @@ pub struct WriteFileTool;
 
 #[async_trait]
 impl Tool for WriteFileTool {
-    fn name(&self) -> &str { "write_file" }
+    fn name(&self) -> &str {
+        "write_file"
+    }
     fn schema(&self) -> ToolSchema {
         ToolSchema::new(
             self.name(),
@@ -89,8 +97,12 @@ impl Tool for WriteFileTool {
             }),
         )
     }
-    fn requires_approval(&self) -> bool { true }
-    fn is_read_only(&self) -> bool { false }
+    fn requires_approval(&self) -> bool {
+        true
+    }
+    fn is_read_only(&self) -> bool {
+        false
+    }
 
     async fn execute(&self, args: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
         let path = require_str(&args, "path")?;
@@ -108,7 +120,11 @@ impl Tool for WriteFileTool {
                 e.message, e.row, e.column
             )));
         }
-        Ok(ToolResult::ok(format!("wrote {} bytes to {}", content.len(), abs)))
+        Ok(ToolResult::ok(format!(
+            "wrote {} bytes to {}",
+            content.len(),
+            abs
+        )))
     }
 }
 
@@ -118,7 +134,9 @@ pub struct EditFileTool;
 
 #[async_trait]
 impl Tool for EditFileTool {
-    fn name(&self) -> &str { "edit_file" }
+    fn name(&self) -> &str {
+        "edit_file"
+    }
     fn schema(&self) -> ToolSchema {
         ToolSchema::new(
             self.name(),
@@ -135,8 +153,12 @@ impl Tool for EditFileTool {
             }),
         )
     }
-    fn requires_approval(&self) -> bool { true }
-    fn is_read_only(&self) -> bool { false }
+    fn requires_approval(&self) -> bool {
+        true
+    }
+    fn is_read_only(&self) -> bool {
+        false
+    }
 
     async fn execute(&self, args: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
         let path = require_str(&args, "path")?;
@@ -170,7 +192,9 @@ pub struct ListDirTool;
 
 #[async_trait]
 impl Tool for ListDirTool {
-    fn name(&self) -> &str { "list_dir" }
+    fn name(&self) -> &str {
+        "list_dir"
+    }
     fn schema(&self) -> ToolSchema {
         ToolSchema::new(
             self.name(),
@@ -178,8 +202,12 @@ impl Tool for ListDirTool {
             json!({"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}),
         )
     }
-    fn requires_approval(&self) -> bool { false }
-    fn is_read_only(&self) -> bool { true }
+    fn requires_approval(&self) -> bool {
+        false
+    }
+    fn is_read_only(&self) -> bool {
+        true
+    }
 
     async fn execute(&self, args: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
         let path = require_str(&args, "path")?;
@@ -199,7 +227,9 @@ pub struct SearchFilesTool;
 
 #[async_trait]
 impl Tool for SearchFilesTool {
-    fn name(&self) -> &str { "search_files" }
+    fn name(&self) -> &str {
+        "search_files"
+    }
     fn schema(&self) -> ToolSchema {
         ToolSchema::new(
             self.name(),
@@ -210,8 +240,12 @@ impl Tool for SearchFilesTool {
             },"required":["pattern"]}),
         )
     }
-    fn requires_approval(&self) -> bool { false }
-    fn is_read_only(&self) -> bool { true }
+    fn requires_approval(&self) -> bool {
+        false
+    }
+    fn is_read_only(&self) -> bool {
+        true
+    }
 
     async fn execute(&self, args: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
         let pattern = require_str(&args, "pattern")?.to_string();
@@ -252,7 +286,9 @@ pub struct GlobTool;
 
 #[async_trait]
 impl Tool for GlobTool {
-    fn name(&self) -> &str { "glob" }
+    fn name(&self) -> &str {
+        "glob"
+    }
     fn schema(&self) -> ToolSchema {
         ToolSchema::new(
             self.name(),
@@ -260,8 +296,12 @@ impl Tool for GlobTool {
             json!({"type":"object","properties":{"pattern":{"type":"string"}},"required":["pattern"]}),
         )
     }
-    fn requires_approval(&self) -> bool { false }
-    fn is_read_only(&self) -> bool { true }
+    fn requires_approval(&self) -> bool {
+        false
+    }
+    fn is_read_only(&self) -> bool {
+        true
+    }
 
     async fn execute(&self, args: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
         let pat = require_str(&args, "pattern")?.to_string();
@@ -311,7 +351,9 @@ fn glob_match(pat: &str, s: &str) -> bool {
         }
     }
     re.push('$');
-    regex::Regex::new(&re).map(|r| r.is_match(s)).unwrap_or(false)
+    regex::Regex::new(&re)
+        .map(|r| r.is_match(s))
+        .unwrap_or(false)
 }
 
 // ---------- shell ----------
@@ -320,7 +362,9 @@ pub struct ShellTool;
 
 #[async_trait]
 impl Tool for ShellTool {
-    fn name(&self) -> &str { "shell" }
+    fn name(&self) -> &str {
+        "shell"
+    }
     fn schema(&self) -> ToolSchema {
         ToolSchema::new(
             self.name(),
@@ -331,8 +375,12 @@ impl Tool for ShellTool {
             },"required":["command"]}),
         )
     }
-    fn requires_approval(&self) -> bool { true }
-    fn is_read_only(&self) -> bool { false }
+    fn requires_approval(&self) -> bool {
+        true
+    }
+    fn is_read_only(&self) -> bool {
+        false
+    }
 
     async fn execute(&self, args: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
         let command = require_str(&args, "command")?.to_string();
@@ -354,16 +402,23 @@ impl Tool for ShellTool {
             body.push_str(&out.stdout);
         }
         if !out.stderr.is_empty() {
-            if !body.is_empty() { body.push('\n'); }
+            if !body.is_empty() {
+                body.push('\n');
+            }
             body.push_str("stderr:\n");
             body.push_str(&out.stderr);
         }
         body.push_str(&format!(
             "\nexit={}{}",
-            out.exit_code.map(|c| c.to_string()).unwrap_or_else(|| "signal".into()),
+            out.exit_code
+                .map(|c| c.to_string())
+                .unwrap_or_else(|| "signal".into()),
             if out.timed_out { " (timed out)" } else { "" }
         ));
-        Ok(ToolResult { content: body, is_error: out.exit_code != Some(0) })
+        Ok(ToolResult {
+            content: body,
+            is_error: out.exit_code != Some(0),
+        })
     }
 }
 
@@ -373,7 +428,9 @@ pub struct FetchUrlTool;
 
 #[async_trait]
 impl Tool for FetchUrlTool {
-    fn name(&self) -> &str { "fetch_url" }
+    fn name(&self) -> &str {
+        "fetch_url"
+    }
     fn schema(&self) -> ToolSchema {
         ToolSchema::new(
             self.name(),
@@ -381,8 +438,12 @@ impl Tool for FetchUrlTool {
             json!({"type":"object","properties":{"url":{"type":"string"}},"required":["url"]}),
         )
     }
-    fn requires_approval(&self) -> bool { false }
-    fn is_read_only(&self) -> bool { true }
+    fn requires_approval(&self) -> bool {
+        false
+    }
+    fn is_read_only(&self) -> bool {
+        true
+    }
 
     async fn execute(&self, args: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
         let url = require_str(&args, "url")?.to_string();
@@ -434,12 +495,22 @@ async fn run_git(cwd: &Utf8Path, args: Vec<String>) -> Result<ToolResult, ToolEr
 pub struct GitStatusTool;
 #[async_trait]
 impl Tool for GitStatusTool {
-    fn name(&self) -> &str { "git_status" }
-    fn schema(&self) -> ToolSchema {
-        ToolSchema::new(self.name(), "Run `git status --short`.", json!({"type":"object","properties":{}}))
+    fn name(&self) -> &str {
+        "git_status"
     }
-    fn requires_approval(&self) -> bool { false }
-    fn is_read_only(&self) -> bool { true }
+    fn schema(&self) -> ToolSchema {
+        ToolSchema::new(
+            self.name(),
+            "Run `git status --short`.",
+            json!({"type":"object","properties":{}}),
+        )
+    }
+    fn requires_approval(&self) -> bool {
+        false
+    }
+    fn is_read_only(&self) -> bool {
+        true
+    }
     async fn execute(&self, _: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
         run_git(&ctx.workspace_root, vec!["status".into(), "--short".into()]).await
     }
@@ -448,7 +519,9 @@ impl Tool for GitStatusTool {
 pub struct GitDiffTool;
 #[async_trait]
 impl Tool for GitDiffTool {
-    fn name(&self) -> &str { "git_diff" }
+    fn name(&self) -> &str {
+        "git_diff"
+    }
     fn schema(&self) -> ToolSchema {
         ToolSchema::new(
             self.name(),
@@ -456,8 +529,12 @@ impl Tool for GitDiffTool {
             json!({"type":"object","properties":{"path":{"type":"string"}}}),
         )
     }
-    fn requires_approval(&self) -> bool { false }
-    fn is_read_only(&self) -> bool { true }
+    fn requires_approval(&self) -> bool {
+        false
+    }
+    fn is_read_only(&self) -> bool {
+        true
+    }
     async fn execute(&self, args: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
         let mut a = vec!["diff".to_string()];
         if let Some(p) = args.get("path").and_then(Value::as_str) {
@@ -470,7 +547,9 @@ impl Tool for GitDiffTool {
 pub struct GitCommitTool;
 #[async_trait]
 impl Tool for GitCommitTool {
-    fn name(&self) -> &str { "git_commit" }
+    fn name(&self) -> &str {
+        "git_commit"
+    }
     fn schema(&self) -> ToolSchema {
         ToolSchema::new(
             self.name(),
@@ -478,12 +557,18 @@ impl Tool for GitCommitTool {
             json!({"type":"object","properties":{"message":{"type":"string"}},"required":["message"]}),
         )
     }
-    fn requires_approval(&self) -> bool { true }
-    fn is_read_only(&self) -> bool { false }
+    fn requires_approval(&self) -> bool {
+        true
+    }
+    fn is_read_only(&self) -> bool {
+        false
+    }
     async fn execute(&self, args: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
         let msg = require_str(&args, "message")?.to_string();
         let add = run_git(&ctx.workspace_root, vec!["add".into(), "-A".into()]).await?;
-        if add.is_error { return Ok(add); }
+        if add.is_error {
+            return Ok(add);
+        }
         run_git(&ctx.workspace_root, vec!["commit".into(), "-m".into(), msg]).await
     }
 }
@@ -491,7 +576,9 @@ impl Tool for GitCommitTool {
 pub struct GitLogTool;
 #[async_trait]
 impl Tool for GitLogTool {
-    fn name(&self) -> &str { "git_log" }
+    fn name(&self) -> &str {
+        "git_log"
+    }
     fn schema(&self) -> ToolSchema {
         ToolSchema::new(
             self.name(),
@@ -499,8 +586,12 @@ impl Tool for GitLogTool {
             json!({"type":"object","properties":{"n":{"type":"integer","default":20}}}),
         )
     }
-    fn requires_approval(&self) -> bool { false }
-    fn is_read_only(&self) -> bool { true }
+    fn requires_approval(&self) -> bool {
+        false
+    }
+    fn is_read_only(&self) -> bool {
+        true
+    }
     async fn execute(&self, args: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
         let n = args.get("n").and_then(Value::as_u64).unwrap_or(20);
         run_git(
@@ -516,7 +607,9 @@ impl Tool for GitLogTool {
 pub struct ListCheckpointsTool;
 #[async_trait]
 impl Tool for ListCheckpointsTool {
-    fn name(&self) -> &str { "list_checkpoints" }
+    fn name(&self) -> &str {
+        "list_checkpoints"
+    }
     fn schema(&self) -> ToolSchema {
         ToolSchema::new(
             self.name(),
@@ -524,8 +617,12 @@ impl Tool for ListCheckpointsTool {
             json!({"type":"object","properties":{}}),
         )
     }
-    fn requires_approval(&self) -> bool { false }
-    fn is_read_only(&self) -> bool { true }
+    fn requires_approval(&self) -> bool {
+        false
+    }
+    fn is_read_only(&self) -> bool {
+        true
+    }
     async fn execute(&self, _: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
         if !ctx.checkpoints.enabled() {
             return Ok(ToolResult::ok("checkpoint store disabled (not a git repo)"));
@@ -548,7 +645,9 @@ impl Tool for ListCheckpointsTool {
 pub struct CheckpointDiffTool;
 #[async_trait]
 impl Tool for CheckpointDiffTool {
-    fn name(&self) -> &str { "checkpoint_diff" }
+    fn name(&self) -> &str {
+        "checkpoint_diff"
+    }
     fn schema(&self) -> ToolSchema {
         ToolSchema::new(
             self.name(),
@@ -556,8 +655,12 @@ impl Tool for CheckpointDiffTool {
             json!({"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}),
         )
     }
-    fn requires_approval(&self) -> bool { false }
-    fn is_read_only(&self) -> bool { true }
+    fn requires_approval(&self) -> bool {
+        false
+    }
+    fn is_read_only(&self) -> bool {
+        true
+    }
     async fn execute(&self, args: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
         let id = require_str(&args, "id")?;
         match ctx.checkpoints.diff(id) {
@@ -571,7 +674,9 @@ impl Tool for CheckpointDiffTool {
 pub struct RollbackTool;
 #[async_trait]
 impl Tool for RollbackTool {
-    fn name(&self) -> &str { "rollback" }
+    fn name(&self) -> &str {
+        "rollback"
+    }
     fn schema(&self) -> ToolSchema {
         ToolSchema::new(
             self.name(),
@@ -579,8 +684,12 @@ impl Tool for RollbackTool {
             json!({"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}),
         )
     }
-    fn requires_approval(&self) -> bool { true }
-    fn is_read_only(&self) -> bool { false }
+    fn requires_approval(&self) -> bool {
+        true
+    }
+    fn is_read_only(&self) -> bool {
+        false
+    }
     async fn execute(&self, args: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
         let id = require_str(&args, "id")?;
         ctx.checkpoints
@@ -595,7 +704,9 @@ impl Tool for RollbackTool {
 pub struct SemanticSearchTool;
 #[async_trait]
 impl Tool for SemanticSearchTool {
-    fn name(&self) -> &str { "semantic_search" }
+    fn name(&self) -> &str {
+        "semantic_search"
+    }
     fn schema(&self) -> ToolSchema {
         ToolSchema::new(
             self.name(),
@@ -608,8 +719,12 @@ impl Tool for SemanticSearchTool {
             },"required":["query"]}),
         )
     }
-    fn requires_approval(&self) -> bool { false }
-    fn is_read_only(&self) -> bool { true }
+    fn requires_approval(&self) -> bool {
+        false
+    }
+    fn is_read_only(&self) -> bool {
+        true
+    }
     async fn execute(&self, args: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
         let query = require_str(&args, "query")?.to_string();
         let top_k = args.get("top_k").and_then(Value::as_u64).unwrap_or(8) as usize;
@@ -640,7 +755,9 @@ impl Tool for SemanticSearchTool {
 pub struct RememberTool;
 #[async_trait]
 impl Tool for RememberTool {
-    fn name(&self) -> &str { "remember" }
+    fn name(&self) -> &str {
+        "remember"
+    }
     fn schema(&self) -> ToolSchema {
         ToolSchema::new(
             self.name(),
@@ -652,9 +769,15 @@ impl Tool for RememberTool {
             },"required":["topic","lesson"]}),
         )
     }
-    fn requires_approval(&self) -> bool { false }
-    fn is_read_only(&self) -> bool { true }
-    fn is_plan_tool(&self) -> bool { true }
+    fn requires_approval(&self) -> bool {
+        false
+    }
+    fn is_read_only(&self) -> bool {
+        true
+    }
+    fn is_plan_tool(&self) -> bool {
+        true
+    }
     async fn execute(&self, args: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
         let topic = require_str(&args, "topic")?;
         let lesson = require_str(&args, "lesson")?;
@@ -668,7 +791,9 @@ impl Tool for RememberTool {
 pub struct RecallTool;
 #[async_trait]
 impl Tool for RecallTool {
-    fn name(&self) -> &str { "recall" }
+    fn name(&self) -> &str {
+        "recall"
+    }
     fn schema(&self) -> ToolSchema {
         ToolSchema::new(
             self.name(),
@@ -679,9 +804,15 @@ impl Tool for RecallTool {
             },"required":["query"]}),
         )
     }
-    fn requires_approval(&self) -> bool { false }
-    fn is_read_only(&self) -> bool { true }
-    fn is_plan_tool(&self) -> bool { true }
+    fn requires_approval(&self) -> bool {
+        false
+    }
+    fn is_read_only(&self) -> bool {
+        true
+    }
+    fn is_plan_tool(&self) -> bool {
+        true
+    }
     async fn execute(&self, args: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
         let q = require_str(&args, "query")?;
         let k = args.get("k").and_then(Value::as_u64).unwrap_or(5).min(20) as usize;
@@ -702,7 +833,9 @@ impl Tool for RecallTool {
 pub struct UpdatePlanTool;
 #[async_trait]
 impl Tool for UpdatePlanTool {
-    fn name(&self) -> &str { "update_plan" }
+    fn name(&self) -> &str {
+        "update_plan"
+    }
     fn schema(&self) -> ToolSchema {
         ToolSchema::new(
             self.name(),
@@ -713,9 +846,15 @@ impl Tool for UpdatePlanTool {
             },"required":["goal","steps"]}),
         )
     }
-    fn requires_approval(&self) -> bool { false }
-    fn is_read_only(&self) -> bool { true }
-    fn is_plan_tool(&self) -> bool { true }
+    fn requires_approval(&self) -> bool {
+        false
+    }
+    fn is_read_only(&self) -> bool {
+        true
+    }
+    fn is_plan_tool(&self) -> bool {
+        true
+    }
     async fn execute(&self, args: Value, _ctx: &ToolContext) -> Result<ToolResult, ToolError> {
         let goal = require_str(&args, "goal")?;
         let steps: Vec<String> = args

@@ -42,5 +42,7 @@ impl LlmClient for OpenAiClient {
             },
         ])
     }
-    fn provider(&self) -> Provider { Provider::OpenAi }
+    fn provider(&self) -> Provider {
+        Provider::OpenAi
+    }
 }

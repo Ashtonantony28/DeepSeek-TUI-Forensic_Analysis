@@ -37,24 +37,18 @@ pub struct CapacityObservation {
     pub consecutive_tool_errors: u32,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct CapacityController {
     pub config: CapacityConfig,
     pub last_action_turn: Option<u32>,
 }
 
-impl Default for CapacityController {
-    fn default() -> Self {
-        Self {
-            config: CapacityConfig::default(),
-            last_action_turn: None,
-        }
-    }
-}
-
 impl CapacityController {
     pub fn new(config: CapacityConfig) -> Self {
-        Self { config, last_action_turn: None }
+        Self {
+            config,
+            last_action_turn: None,
+        }
     }
 
     pub fn observe(&self, obs: CapacityObservation) -> RiskBand {
@@ -75,11 +69,7 @@ impl CapacityController {
         }
     }
 
-    pub fn decide(
-        &mut self,
-        turn_index: u32,
-        band: RiskBand,
-    ) -> GuardrailAction {
+    pub fn decide(&mut self, turn_index: u32, band: RiskBand) -> GuardrailAction {
         if !self.config.enabled {
             return GuardrailAction::NoIntervention;
         }

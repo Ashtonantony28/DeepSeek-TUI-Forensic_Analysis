@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  ci:
+    name: ${{ matrix.os }} / rust-${{ matrix.rust }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        rust: [stable, "1.88"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust ${{ matrix.rust }}
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry and target dir
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-rust-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-rust-${{ matrix.rust }}-
+            ${{ runner.os }}-rust-
+
+      - name: Check formatting
+        run: cargo fmt --check
+        working-directory: agent-tui
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+        working-directory: agent-tui
+
+      - name: Build (release)
+        run: cargo build --release --workspace
+        working-directory: agent-tui
+
+      - name: Test
+        run: cargo test --workspace
+        working-directory: agent-tui
+        env:
+          AGENT_TUI_MOCK: "1"

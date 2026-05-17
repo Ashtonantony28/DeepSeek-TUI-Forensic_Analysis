@@ -23,7 +23,7 @@ impl Default for CycleConfig {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct CycleManager {
     pub config: CycleConfig,
     pub current_cycle: u32,
@@ -36,18 +36,12 @@ pub struct CycleOutcome {
     pub briefing_message: Message,
 }
 
-impl Default for CycleManager {
-    fn default() -> Self {
-        Self {
-            config: CycleConfig::default(),
-            current_cycle: 0,
-        }
-    }
-}
-
 impl CycleManager {
     pub fn new(config: CycleConfig) -> Self {
-        Self { config, current_cycle: 0 }
+        Self {
+            config,
+            current_cycle: 0,
+        }
     }
 
     /// If tokens exceed `cycle_tokens`, build the briefing and replace
@@ -68,9 +62,7 @@ impl CycleManager {
         let from = self.current_cycle;
         let to = self.current_cycle + 1;
         let keep = self.config.keep_recent_messages.min(messages.len());
-        let tail: Vec<Message> = messages
-            .drain(messages.len() - keep..)
-            .collect();
+        let tail: Vec<Message> = messages.drain(messages.len() - keep..).collect();
 
         let xml = format!(
             "<cycle_briefing from=\"{from}\" to=\"{to}\">\n{briefing_summary}\n</cycle_briefing>"
@@ -84,7 +76,11 @@ impl CycleManager {
         messages.push(briefing.clone());
         messages.extend(tail);
         self.current_cycle = to;
-        Some(CycleOutcome { from, to, briefing_message: briefing })
+        Some(CycleOutcome {
+            from,
+            to,
+            briefing_message: briefing,
+        })
     }
 }
 
@@ -102,7 +98,9 @@ mod tests {
     #[test]
     fn cycles_above_threshold_and_keeps_tail() {
         let mut m = CycleManager::default();
-        let mut msgs: Vec<Message> = (0..160).map(|_| Message::user_text("x".repeat(20_000))).collect();
+        let mut msgs: Vec<Message> = (0..160)
+            .map(|_| Message::user_text("x".repeat(20_000)))
+            .collect();
         let _last = msgs.last().unwrap().clone();
         let out = m.maybe_cycle(&mut msgs, "summary".into()).unwrap();
         assert_eq!(out.from, 0);

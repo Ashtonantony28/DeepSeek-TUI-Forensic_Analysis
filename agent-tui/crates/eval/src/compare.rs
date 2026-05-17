@@ -36,44 +36,60 @@ pub fn compare_runs(a: &EvalRun, b: &EvalRun) -> String {
     let pb = b.summary.pass_at_1;
     out.push_str(&format!(
         "| pass@1 | {:.3} | {:.3} | {:+.3} |\n",
-        pa, pb, pb - pa
+        pa,
+        pb,
+        pb - pa
     ));
 
     let sa = a.summary.semantic_pass_at_1;
     let sb = b.summary.semantic_pass_at_1;
     out.push_str(&format!(
         "| semantic_pass@1 | {:.3} | {:.3} | {:+.3} |\n",
-        sa, sb, sb - sa
+        sa,
+        sb,
+        sb - sa
     ));
 
     let ca = a.summary.mean_cost_usd;
     let cb = b.summary.mean_cost_usd;
     out.push_str(&format!(
         "| mean_cost_usd | ${:.4} | ${:.4} | {:+.4} |\n",
-        ca, cb, cb - ca
+        ca,
+        cb,
+        cb - ca
     ));
 
     let ta = a.summary.mean_turns;
     let tb = b.summary.mean_turns;
     out.push_str(&format!(
         "| mean_turns | {:.1} | {:.1} | {:+.1} |\n",
-        ta, tb, tb - ta
+        ta,
+        tb,
+        tb - ta
     ));
 
     let wa = a.summary.mean_wallclock_s;
     let wb = b.summary.mean_wallclock_s;
     out.push_str(&format!(
         "| mean_wallclock_s | {:.1} | {:.1} | {:+.1} |\n",
-        wa, wb, wb - wa
+        wa,
+        wb,
+        wb - wa
     ));
 
     out.push('\n');
 
     // ── Per-instance flips ─────────────────────────────────────────────────
-    let a_map: HashMap<&str, &InstanceResult> =
-        a.instances.iter().map(|i| (i.instance_id.as_str(), i)).collect();
-    let b_map: HashMap<&str, &InstanceResult> =
-        b.instances.iter().map(|i| (i.instance_id.as_str(), i)).collect();
+    let a_map: HashMap<&str, &InstanceResult> = a
+        .instances
+        .iter()
+        .map(|i| (i.instance_id.as_str(), i))
+        .collect();
+    let b_map: HashMap<&str, &InstanceResult> = b
+        .instances
+        .iter()
+        .map(|i| (i.instance_id.as_str(), i))
+        .collect();
 
     let mut a_pass_b_fail: Vec<&str> = Vec::new();
     let mut b_pass_a_fail: Vec<&str> = Vec::new();
@@ -89,9 +105,9 @@ pub fn compare_runs(a: &EvalRun, b: &EvalRun) -> String {
         let a_pass = a_map.get(id).map(|r| r.pass_at_1).unwrap_or(false);
         let b_pass = b_map.get(id).map(|r| r.pass_at_1).unwrap_or(false);
         match (a_pass, b_pass) {
-            (true, false)  => a_pass_b_fail.push(id),
-            (false, true)  => b_pass_a_fail.push(id),
-            (true, true)   => both_pass.push(id),
+            (true, false) => a_pass_b_fail.push(id),
+            (false, true) => b_pass_a_fail.push(id),
+            (true, true) => both_pass.push(id),
             (false, false) => both_fail.push(id),
         }
     }
@@ -100,25 +116,39 @@ pub fn compare_runs(a: &EvalRun, b: &EvalRun) -> String {
 
     out.push_str(&format!("**Both pass** ({})\n", both_pass.len()));
     if !both_pass.is_empty() {
-        for id in &both_pass { out.push_str(&format!("- {id}\n")); }
+        for id in &both_pass {
+            out.push_str(&format!("- {id}\n"));
+        }
     }
     out.push('\n');
 
     out.push_str(&format!("**Both fail** ({})\n", both_fail.len()));
     if !both_fail.is_empty() {
-        for id in &both_fail { out.push_str(&format!("- {id}\n")); }
+        for id in &both_fail {
+            out.push_str(&format!("- {id}\n"));
+        }
     }
     out.push('\n');
 
-    out.push_str(&format!("**A passed, B failed** ({})\n", a_pass_b_fail.len()));
+    out.push_str(&format!(
+        "**A passed, B failed** ({})\n",
+        a_pass_b_fail.len()
+    ));
     if !a_pass_b_fail.is_empty() {
-        for id in &a_pass_b_fail { out.push_str(&format!("- {id}: A=pass, B=fail\n")); }
+        for id in &a_pass_b_fail {
+            out.push_str(&format!("- {id}: A=pass, B=fail\n"));
+        }
     }
     out.push('\n');
 
-    out.push_str(&format!("**B passed, A failed** ({})\n", b_pass_a_fail.len()));
+    out.push_str(&format!(
+        "**B passed, A failed** ({})\n",
+        b_pass_a_fail.len()
+    ));
     if !b_pass_a_fail.is_empty() {
-        for id in &b_pass_a_fail { out.push_str(&format!("- {id}: A=fail, B=pass\n")); }
+        for id in &b_pass_a_fail {
+            out.push_str(&format!("- {id}: A=fail, B=pass\n"));
+        }
     }
     out.push('\n');
 
@@ -128,7 +158,7 @@ pub fn compare_runs(a: &EvalRun, b: &EvalRun) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{EvalConfig, EvalRun, EvalSummary, InstanceResult};
+    use crate::{EvalConfig, EvalRun, InstanceResult};
 
     fn make_run(
         provider: &str,
@@ -161,13 +191,32 @@ mod tests {
 
     #[test]
     fn compare_produces_markdown_headers() {
-        let a = make_run("anthropic", "claude-opus", 1, vec![inst("x", true), inst("y", false)]);
-        let b = make_run("openai", "gpt-4o", 4, vec![inst("x", false), inst("y", true)]);
+        let a = make_run(
+            "anthropic",
+            "claude-opus",
+            1,
+            vec![inst("x", true), inst("y", false)],
+        );
+        let b = make_run(
+            "openai",
+            "gpt-4o",
+            4,
+            vec![inst("x", false), inst("y", true)],
+        );
         let md = compare_runs(&a, &b);
-        assert!(md.contains("## Comparison"), "should have comparison header");
+        assert!(
+            md.contains("## Comparison"),
+            "should have comparison header"
+        );
         assert!(md.contains("pass@1"), "should include pass@1 metric");
-        assert!(md.contains("semantic_pass@1"), "should include semantic metric");
-        assert!(md.contains("Per-instance flips"), "should have flip section");
+        assert!(
+            md.contains("semantic_pass@1"),
+            "should include semantic metric"
+        );
+        assert!(
+            md.contains("Per-instance flips"),
+            "should have flip section"
+        );
     }
 
     #[test]

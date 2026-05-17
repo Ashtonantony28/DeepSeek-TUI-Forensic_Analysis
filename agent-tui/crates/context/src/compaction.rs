@@ -28,20 +28,15 @@ pub struct CompactionResult {
     pub after_tokens: u32,
 }
 
+#[derive(Default)]
 pub struct Compactor {
     pub config: CompactionConfig,
 }
 
-impl Default for Compactor {
-    fn default() -> Self {
-        Self {
-            config: CompactionConfig::default(),
-        }
-    }
-}
-
 impl Compactor {
-    pub fn new(config: CompactionConfig) -> Self { Self { config } }
+    pub fn new(config: CompactionConfig) -> Self {
+        Self { config }
+    }
 
     pub fn should_compact(&self, messages: &[Message]) -> bool {
         estimate_tokens(messages) >= self.config.trigger_tokens
@@ -55,23 +50,27 @@ impl Compactor {
         let keep = self.config.keep_recent_messages.min(messages.len());
         let head_count = messages.len().saturating_sub(keep);
         if head_count == 0 {
-            return CompactionResult { before_tokens: before, after_tokens: before };
+            return CompactionResult {
+                before_tokens: before,
+                after_tokens: before,
+            };
         }
         let tail: Vec<Message> = messages.drain(messages.len() - keep..).collect();
         messages.clear();
         let summary = Message {
             role: Role::System,
             content: vec![ContentBlock::Text {
-                text: format!(
-                    "<compacted_history>\n{summary_text}\n</compacted_history>"
-                ),
+                text: format!("<compacted_history>\n{summary_text}\n</compacted_history>"),
             }],
             metadata: Default::default(),
         };
         messages.push(summary);
         messages.extend(tail);
         let after = estimate_tokens(messages);
-        CompactionResult { before_tokens: before, after_tokens: after }
+        CompactionResult {
+            before_tokens: before,
+            after_tokens: after,
+        }
     }
 }
 
@@ -82,7 +81,9 @@ mod tests {
     #[test]
     fn compaction_drops_head() {
         let c = Compactor::default();
-        let mut msgs: Vec<Message> = (0..200).map(|_| Message::user_text("x".repeat(20_000))).collect();
+        let mut msgs: Vec<Message> = (0..200)
+            .map(|_| Message::user_text("x".repeat(20_000)))
+            .collect();
         assert!(c.should_compact(&msgs));
         let r = c.apply(&mut msgs, "summary".into());
         assert!(r.after_tokens < r.before_tokens);

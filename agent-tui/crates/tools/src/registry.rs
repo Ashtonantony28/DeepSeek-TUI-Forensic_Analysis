@@ -49,7 +49,9 @@ pub struct ToolRegistry {
 }
 
 impl ToolRegistry {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     pub fn register(&mut self, tool: Arc<dyn Tool>) {
         self.tools.insert(tool.name().to_string(), tool);
@@ -77,11 +79,9 @@ impl ToolRegistry {
     /// hits the network. Synchronous callers can fall back to `with_builtins`
     /// without retriever.
     pub async fn enable_hybrid_retrieval(ctx: &mut ToolContext) {
-        let retriever = agent_tui_retrieval::HybridRetriever::new(
-            ctx.workspace_root.clone(),
-        )
-        .prepare()
-        .await;
+        let retriever = agent_tui_retrieval::HybridRetriever::new(ctx.workspace_root.clone())
+            .prepare()
+            .await;
         ctx.retriever = Some(Arc::new(retriever));
     }
 
@@ -96,7 +96,9 @@ impl ToolRegistry {
         use crate::tools::mcp_adapter::McpToolAdapter;
         let mut count = 0usize;
         for desc in manager.list_all_tools().await? {
-            let Some(client) = manager.client_for(&desc.server_name) else { continue };
+            let Some(client) = manager.client_for(&desc.server_name) else {
+                continue;
+            };
             let adapter = McpToolAdapter::new(desc, client);
             self.register(Arc::new(adapter));
             count += 1;

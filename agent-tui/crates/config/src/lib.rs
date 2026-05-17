@@ -22,9 +22,15 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum ConfigError {
     #[error("io error reading {path}: {source}")]
-    Io { path: Utf8PathBuf, source: std::io::Error },
+    Io {
+        path: Utf8PathBuf,
+        source: std::io::Error,
+    },
     #[error("toml parse error in {path}: {source}")]
-    Toml { path: Utf8PathBuf, source: toml::de::Error },
+    Toml {
+        path: Utf8PathBuf,
+        source: toml::de::Error,
+    },
     #[error("toml serialize error: {0}")]
     TomlSer(#[from] toml::ser::Error),
     #[error("project overlay attempts to set forbidden key `{0}`")]
@@ -118,19 +124,22 @@ impl Default for Extensions {
 }
 
 impl Extensions {
-    fn default_true() -> bool { true }
-    fn default_retrieval_mode() -> String { "hybrid".into() }
-    fn default_auto() -> String { "auto".into() }
-    fn default_verifier_count() -> u32 { 3 }
+    fn default_true() -> bool {
+        true
+    }
+    fn default_retrieval_mode() -> String {
+        "hybrid".into()
+    }
+    fn default_auto() -> String {
+        "auto".into()
+    }
+    fn default_verifier_count() -> u32 {
+        3
+    }
 }
 
 /// Forbidden keys for project-level overlays.
-pub const FORBIDDEN_PROJECT_KEYS: &[&str] = &[
-    "api_key",
-    "base_url",
-    "provider",
-    "mcp_config_path",
-];
+pub const FORBIDDEN_PROJECT_KEYS: &[&str] = &["api_key", "base_url", "provider", "mcp_config_path"];
 
 #[derive(Debug, Clone, Default)]
 pub struct CliOverrides {
@@ -214,9 +223,10 @@ fn apply_overlay(cfg: &mut Config, raw: toml::Value, forbid: bool) -> Result<(),
                     for (_, v) in providers {
                         if let toml::Value::Table(pt) = v {
                             if pt.contains_key(*k) {
-                                return Err(ConfigError::ForbiddenProjectKey(
-                                    format!("providers.*.{}", k),
-                                ));
+                                return Err(ConfigError::ForbiddenProjectKey(format!(
+                                    "providers.*.{}",
+                                    k
+                                )));
                             }
                         }
                     }
@@ -225,9 +235,9 @@ fn apply_overlay(cfg: &mut Config, raw: toml::Value, forbid: bool) -> Result<(),
         }
     }
 
-    let overlay: Config = toml::Value::Table(table).try_into().map_err(|e| {
-        ConfigError::Other(format!("invalid config shape: {e}"))
-    })?;
+    let overlay: Config = toml::Value::Table(table)
+        .try_into()
+        .map_err(|e| ConfigError::Other(format!("invalid config shape: {e}")))?;
 
     if overlay.provider.is_some() {
         cfg.provider = overlay.provider;
@@ -279,7 +289,10 @@ fn apply_env(cfg: &mut Config) {
         let upper = provider.as_str().to_uppercase();
         let api_key_env = format!("AGENT_TUI_API_KEY_{upper}");
         let base_url_env = format!("AGENT_TUI_BASE_URL_{upper}");
-        let entry = cfg.providers.entry(provider.as_str().to_string()).or_default();
+        let entry = cfg
+            .providers
+            .entry(provider.as_str().to_string())
+            .or_default();
         if let Ok(v) = std::env::var(&api_key_env) {
             entry.api_key = Some(v);
         }

@@ -45,7 +45,10 @@ impl OpenAiCompatClient {
 impl LlmClient for OpenAiCompatClient {
     async fn stream(&self, req: ChatRequest) -> Result<ChatStream, LlmError> {
         let body = build_request_body(&req)?;
-        let url = format!("{}/v1/chat/completions", self.base_url.trim_end_matches('/'));
+        let url = format!(
+            "{}/v1/chat/completions",
+            self.base_url.trim_end_matches('/')
+        );
 
         let mut rb = self
             .http
@@ -211,7 +214,11 @@ fn render_oai_content(m: &Message) -> (Option<Value>, Option<Value>, Option<Stri
                     }
                 }));
             }
-            ContentBlock::ToolResult { tool_use_id, content, .. } => {
+            ContentBlock::ToolResult {
+                tool_use_id,
+                content,
+                ..
+            } => {
                 tool_result_id = Some(tool_use_id.0.clone());
                 tool_result_text = Some(content.clone());
             }
@@ -225,7 +232,11 @@ fn render_oai_content(m: &Message) -> (Option<Value>, Option<Value>, Option<Stri
             Some(tid),
         );
     }
-    let content_val = if text.is_empty() { None } else { Some(Value::String(text)) };
+    let content_val = if text.is_empty() {
+        None
+    } else {
+        Some(Value::String(text))
+    };
     let tc_val = if tool_calls.is_empty() {
         None
     } else {
@@ -305,20 +316,19 @@ fn translate_chunk(
             }
         }
         // DeepSeek/some providers use `reasoning_content`; others use `reasoning`.
-        for rc in [&choice.delta.reasoning_content, &choice.delta.reasoning] {
-            if let Some(t) = rc {
-                if !t.is_empty() {
-                    out.push(Ok(StreamEvent::ThinkingDelta(t.clone())));
-                }
+        for t in [&choice.delta.reasoning_content, &choice.delta.reasoning]
+            .into_iter()
+            .flatten()
+        {
+            if !t.is_empty() {
+                out.push(Ok(StreamEvent::ThinkingDelta(t.clone())));
             }
         }
         for tc in &choice.delta.tool_calls {
             let mut guard = tool_id_by_index.lock().unwrap();
             let entry = guard.entry(tc.index).or_insert_with(|| {
                 (
-                    ToolCallId(
-                        tc.id.clone().unwrap_or_else(|| ToolCallId::new().0),
-                    ),
+                    ToolCallId(tc.id.clone().unwrap_or_else(|| ToolCallId::new().0)),
                     false,
                 )
             });
@@ -326,7 +336,10 @@ fn translate_chunk(
             let id = entry.0.clone();
             if !started {
                 if let Some(name) = tc.function.as_ref().and_then(|f| f.name.clone()) {
-                    out.push(Ok(StreamEvent::ToolCallStart { id: id.clone(), name }));
+                    out.push(Ok(StreamEvent::ToolCallStart {
+                        id: id.clone(),
+                        name,
+                    }));
                     entry.1 = true;
                 }
             }

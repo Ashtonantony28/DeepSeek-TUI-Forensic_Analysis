@@ -66,24 +66,45 @@ impl EvalRun {
     pub fn compute_summary(config: EvalConfig, instances: Vec<InstanceResult>) -> Self {
         let n = instances.len() as f32;
         let pass_count = instances.iter().filter(|i| i.pass_at_1).count() as f32;
-        let sem_eligible: Vec<_> = instances.iter().filter(|i| i.semantic_pass.is_some()).collect();
-        let sem_pass = sem_eligible.iter().filter(|i| i.semantic_pass == Some(true)).count() as f32;
+        let sem_eligible: Vec<_> = instances
+            .iter()
+            .filter(|i| i.semantic_pass.is_some())
+            .collect();
+        let sem_pass = sem_eligible
+            .iter()
+            .filter(|i| i.semantic_pass == Some(true))
+            .count() as f32;
         let sem_total = sem_eligible.len() as f32;
 
         let summary = EvalSummary {
             pass_at_1: if n > 0.0 { pass_count / n } else { 0.0 },
-            semantic_pass_at_1: if sem_total > 0.0 { sem_pass / sem_total } else { 0.0 },
+            semantic_pass_at_1: if sem_total > 0.0 {
+                sem_pass / sem_total
+            } else {
+                0.0
+            },
             mean_cost_usd: if n > 0.0 {
                 instances.iter().map(|i| i.cost_usd).sum::<f32>() / n
-            } else { 0.0 },
+            } else {
+                0.0
+            },
             mean_turns: if n > 0.0 {
                 instances.iter().map(|i| i.turns as f32).sum::<f32>() / n
-            } else { 0.0 },
+            } else {
+                0.0
+            },
             mean_wallclock_s: if n > 0.0 {
                 instances.iter().map(|i| i.wallclock_s).sum::<f32>() / n
-            } else { 0.0 },
+            } else {
+                0.0
+            },
         };
-        Self { config, summary, instances, timestamp: chrono::Utc::now() }
+        Self {
+            config,
+            summary,
+            instances,
+            timestamp: chrono::Utc::now(),
+        }
     }
 }
 

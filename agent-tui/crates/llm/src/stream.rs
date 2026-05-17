@@ -17,10 +17,21 @@ pub struct Usage {
 pub enum StreamEvent {
     TextDelta(String),
     ThinkingDelta(String),
-    ToolCallStart { id: ToolCallId, name: String },
-    ToolCallDelta { id: ToolCallId, json_fragment: String },
-    ToolCallEnd { id: ToolCallId },
-    MessageEnd { stop_reason: String, usage: Usage },
+    ToolCallStart {
+        id: ToolCallId,
+        name: String,
+    },
+    ToolCallDelta {
+        id: ToolCallId,
+        json_fragment: String,
+    },
+    ToolCallEnd {
+        id: ToolCallId,
+    },
+    MessageEnd {
+        stop_reason: String,
+        usage: Usage,
+    },
 }
 
 pub type ChatStream = Pin<Box<dyn Stream<Item = Result<StreamEvent, LlmError>> + Send>>;

@@ -53,7 +53,9 @@ impl MemoryStore {
         if path.exists() {
             if let Ok(f) = std::fs::File::open(path.as_std_path()) {
                 for line in BufReader::new(f).lines().map_while(Result::ok) {
-                    if line.trim().is_empty() { continue; }
+                    if line.trim().is_empty() {
+                        continue;
+                    }
                     if let Ok(l) = serde_json::from_str::<Lesson>(&line) {
                         lessons.push(l);
                     }
@@ -75,7 +77,11 @@ impl MemoryStore {
         }
     }
 
-    pub fn add(&self, topic: impl Into<String>, lesson: impl Into<String>) -> Result<(), MemoryError> {
+    pub fn add(
+        &self,
+        topic: impl Into<String>,
+        lesson: impl Into<String>,
+    ) -> Result<(), MemoryError> {
         if !self.enabled {
             return Ok(());
         }
@@ -159,7 +165,11 @@ fn jaccard(a: &HashSet<String>, b: &HashSet<String>) -> f32 {
     }
     let inter = a.intersection(b).count() as f32;
     let union = a.union(b).count() as f32;
-    if union == 0.0 { 0.0 } else { inter / union }
+    if union == 0.0 {
+        0.0
+    } else {
+        inter / union
+    }
 }
 
 #[cfg(test)]
@@ -173,8 +183,10 @@ mod tests {
         let root = Utf8PathBuf::from_path_buf(td.path().to_path_buf()).unwrap();
         {
             let mem = MemoryStore::load(&root);
-            mem.add("rust async", "use tokio::spawn for fire-and-forget tasks").unwrap();
-            mem.add("git", "prefer git restore over git checkout for files").unwrap();
+            mem.add("rust async", "use tokio::spawn for fire-and-forget tasks")
+                .unwrap();
+            mem.add("git", "prefer git restore over git checkout for files")
+                .unwrap();
             assert_eq!(mem.len(), 2);
         }
         let mem = MemoryStore::load(&root);
@@ -207,7 +219,8 @@ mod tests {
         let td = tempdir().unwrap();
         let root = Utf8PathBuf::from_path_buf(td.path().to_path_buf()).unwrap();
         let mem = MemoryStore::load(&root);
-        mem.add("retrieval", "use reciprocal rank fusion to combine signals").unwrap();
+        mem.add("retrieval", "use reciprocal rank fusion to combine signals")
+            .unwrap();
         let s = mem.suffix_for("fusion retrieval signal", 3).unwrap();
         assert!(s.contains("reciprocal rank fusion"));
         assert!(s.starts_with("\n\nRelevant lessons"));

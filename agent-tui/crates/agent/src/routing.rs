@@ -129,11 +129,9 @@ static EASY_VERB_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"^(\s*)(list|show|what is|what's|where is|where's|how many|name|print|echo)\b")
         .unwrap()
 });
-static CODE_FENCE_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"```").unwrap());
-static PATH_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?:[\w\-\.]+/){1,}[\w\-\.]+\.[A-Za-z0-9]{1,6}").unwrap()
-});
+static CODE_FENCE_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"```").unwrap());
+static PATH_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(?:[\w\-\.]+/){1,}[\w\-\.]+\.[A-Za-z0-9]{1,6}").unwrap());
 static STACK_TRACE_RE: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"(?im)^\s*(at\s+[\w\.\$<>]+\(|thread\s+'\w+'\s+panicked|Traceback \(most recent|goroutine \d+ \[)")
         .unwrap()
@@ -175,9 +173,7 @@ mod tests {
     fn router_maps_to_concrete_models() {
         let r = Router::new(Provider::Anthropic);
         // design (+2) + path (+1) = Large
-        let (t, m) = r.pick(
-            "design a sharded retry queue and prototype it in src/queue.rs",
-        );
+        let (t, m) = r.pick("design a sharded retry queue and prototype it in src/queue.rs");
         assert_eq!(t, Tier::Large);
         assert!(m.contains("opus") || m.contains("sonnet"));
 

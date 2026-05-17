@@ -33,11 +33,15 @@ pub enum SubAgentError {
 pub struct SubAgentId(pub String);
 
 impl SubAgentId {
-    pub fn new() -> Self { Self(format!("sub-{}", Uuid::new_v4())) }
+    pub fn new() -> Self {
+        Self(format!("sub-{}", Uuid::new_v4()))
+    }
 }
 
 impl Default for SubAgentId {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[derive(Clone)]
@@ -77,7 +81,9 @@ impl SubAgentManager {
     pub async fn eval(&self, id: &SubAgentId, prompt: String) -> Result<String, SubAgentError> {
         let state = {
             let g = self.sessions.lock().await;
-            g.get(id).cloned().ok_or_else(|| SubAgentError::NotFound(id.0.clone()))?
+            g.get(id)
+                .cloned()
+                .ok_or_else(|| SubAgentError::NotFound(id.0.clone()))?
         };
         let mut messages = state.messages.clone();
         messages.push(Message::user_text(prompt.clone()));
@@ -114,7 +120,8 @@ impl SubAgentManager {
         max_parallel: usize,
     ) -> Vec<Result<String, SubAgentError>> {
         let model = model.into();
-        let mut results: Vec<Option<Result<String, SubAgentError>>> = (0..prompts.len()).map(|_| None).collect();
+        let mut results: Vec<Option<Result<String, SubAgentError>>> =
+            (0..prompts.len()).map(|_| None).collect();
         let mut tasks = FuturesUnordered::new();
         let mut iter = prompts.into_iter().enumerate();
         let mut active = 0usize;
@@ -136,7 +143,9 @@ impl SubAgentManager {
                     break;
                 }
             }
-            if active == 0 { break; }
+            if active == 0 {
+                break;
+            }
             if let Some((idx, res)) = tasks.next().await {
                 results[idx] = Some(res);
                 active -= 1;
@@ -166,12 +175,21 @@ mod tests {
     #[tokio::test]
     async fn fan_out_runs_all() {
         let mock = Arc::new(MockClient::new());
-        for _ in 0..3 { mock.push_text("ok"); }
+        for _ in 0..3 {
+            mock.push_text("ok");
+        }
         let mgr = SubAgentManager::new(mock.clone() as Arc<dyn LlmClient>);
         let r = mgr
-            .parallel_fan_out("mock-model", None, vec!["a".into(), "b".into(), "c".into()], 2)
+            .parallel_fan_out(
+                "mock-model",
+                None,
+                vec!["a".into(), "b".into(), "c".into()],
+                2,
+            )
             .await;
         assert_eq!(r.len(), 3);
-        for x in r { x.unwrap(); }
+        for x in r {
+            x.unwrap();
+        }
     }
 }

@@ -55,12 +55,14 @@ impl ReplSession {
         let mut child = cmd
             .spawn()
             .map_err(|e| ToolError::ExecutionFailed(format!("spawn shell: {e}")))?;
-        let stdin = child.stdin.take().ok_or_else(|| {
-            ToolError::ExecutionFailed("no stdin on shell child".into())
-        })?;
-        let stdout = child.stdout.take().ok_or_else(|| {
-            ToolError::ExecutionFailed("no stdout on shell child".into())
-        })?;
+        let stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| ToolError::ExecutionFailed("no stdin on shell child".into()))?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| ToolError::ExecutionFailed("no stdout on shell child".into()))?;
         // Merge stderr into stdout so the model sees both streams in
         // submission order. We can't directly redirect with tokio, so
         // we tell the child to merge via `exec 2>&1`.
@@ -69,7 +71,9 @@ impl ReplSession {
             stdin,
             stdout: BufReader::new(stdout),
         };
-        s.stdin.write_all(b"exec 2>&1\n").await
+        s.stdin
+            .write_all(b"exec 2>&1\n")
+            .await
             .map_err(|e| ToolError::ExecutionFailed(format!("init shell: {e}")))?;
         Ok(s)
     }
@@ -142,7 +146,9 @@ pub struct ReplRegistry {
 }
 
 impl ReplRegistry {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     pub async fn open(
         &self,
@@ -167,9 +173,9 @@ impl ReplRegistry {
         timeout_secs: u64,
     ) -> Result<String, ToolError> {
         let mut g = self.inner.lock().await;
-        let s = g.get_mut(name).ok_or_else(|| {
-            ToolError::InvalidInput(format!("repl session `{name}` not open"))
-        })?;
+        let s = g
+            .get_mut(name)
+            .ok_or_else(|| ToolError::InvalidInput(format!("repl session `{name}` not open")))?;
         s.eval(code, timeout_secs).await
     }
 
@@ -200,7 +206,9 @@ pub struct ReplOpenTool;
 
 #[async_trait]
 impl Tool for ReplOpenTool {
-    fn name(&self) -> &str { "repl_open" }
+    fn name(&self) -> &str {
+        "repl_open"
+    }
     fn schema(&self) -> ToolSchema {
         ToolSchema::new(
             self.name(),
@@ -211,8 +219,12 @@ impl Tool for ReplOpenTool {
             },"required":["name"]}),
         )
     }
-    fn requires_approval(&self) -> bool { true }
-    fn is_read_only(&self) -> bool { false }
+    fn requires_approval(&self) -> bool {
+        true
+    }
+    fn is_read_only(&self) -> bool {
+        false
+    }
 
     async fn execute(&self, args: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
         let name = args
@@ -220,10 +232,7 @@ impl Tool for ReplOpenTool {
             .and_then(Value::as_str)
             .ok_or_else(|| ToolError::MissingField("name".into()))?
             .to_string();
-        let reg = ctx
-            .repl
-            .as_ref()
-            .ok_or_else(|| ToolError::NotAvailable)?;
+        let reg = ctx.repl.as_ref().ok_or(ToolError::NotAvailable)?;
         reg.open(name.clone(), &ctx.workspace_root).await?;
         Ok(ToolResult::ok(format!("opened repl `{name}`")))
     }
@@ -235,7 +244,9 @@ pub struct ReplEvalTool;
 
 #[async_trait]
 impl Tool for ReplEvalTool {
-    fn name(&self) -> &str { "repl_eval" }
+    fn name(&self) -> &str {
+        "repl_eval"
+    }
     fn schema(&self) -> ToolSchema {
         ToolSchema::new(
             self.name(),
@@ -248,8 +259,12 @@ impl Tool for ReplEvalTool {
             },"required":["name","code"]}),
         )
     }
-    fn requires_approval(&self) -> bool { true }
-    fn is_read_only(&self) -> bool { false }
+    fn requires_approval(&self) -> bool {
+        true
+    }
+    fn is_read_only(&self) -> bool {
+        false
+    }
 
     async fn execute(&self, args: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
         let name = args
@@ -264,10 +279,7 @@ impl Tool for ReplEvalTool {
             .get("timeout_secs")
             .and_then(Value::as_u64)
             .unwrap_or(DEFAULT_EVAL_TIMEOUT_SECS);
-        let reg = ctx
-            .repl
-            .as_ref()
-            .ok_or_else(|| ToolError::NotAvailable)?;
+        let reg = ctx.repl.as_ref().ok_or(ToolError::NotAvailable)?;
         let out = reg.eval(name, code, timeout_secs).await?;
         Ok(ToolResult::ok(out))
     }
@@ -279,7 +291,9 @@ pub struct ReplCloseTool;
 
 #[async_trait]
 impl Tool for ReplCloseTool {
-    fn name(&self) -> &str { "repl_close" }
+    fn name(&self) -> &str {
+        "repl_close"
+    }
     fn schema(&self) -> ToolSchema {
         ToolSchema::new(
             self.name(),
@@ -289,18 +303,19 @@ impl Tool for ReplCloseTool {
             },"required":["name"]}),
         )
     }
-    fn requires_approval(&self) -> bool { false }
-    fn is_read_only(&self) -> bool { false }
+    fn requires_approval(&self) -> bool {
+        false
+    }
+    fn is_read_only(&self) -> bool {
+        false
+    }
 
     async fn execute(&self, args: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
         let name = args
             .get("name")
             .and_then(Value::as_str)
             .ok_or_else(|| ToolError::MissingField("name".into()))?;
-        let reg = ctx
-            .repl
-            .as_ref()
-            .ok_or_else(|| ToolError::NotAvailable)?;
+        let reg = ctx.repl.as_ref().ok_or(ToolError::NotAvailable)?;
         reg.close(name).await?;
         Ok(ToolResult::ok(format!("closed repl `{name}`")))
     }

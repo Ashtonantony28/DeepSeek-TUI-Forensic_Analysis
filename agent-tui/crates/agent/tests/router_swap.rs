@@ -15,7 +15,8 @@ fn router_classifies_basic_buckets() {
     assert_eq!(r.pick("list files").0, Tier::Small);
     // refactor (+2) + path (+1) = Large under the >=3 threshold.
     assert_eq!(
-        r.pick("refactor src/core/engine.rs to use a state machine").0,
+        r.pick("refactor src/core/engine.rs to use a state machine")
+            .0,
         Tier::Large,
     );
     // Long plain text with no hard signals lands in Mid.
@@ -67,7 +68,10 @@ async fn engine_swaps_model_when_routing_enabled() {
     assert!(saw_status, "expected a router: status event");
     let msg = routed_to.unwrap();
     assert!(msg.contains("small"), "expected small tier, got: {msg}");
-    assert!(msg.contains("haiku"), "expected an Anthropic haiku model, got: {msg}");
+    assert!(
+        msg.contains("haiku"),
+        "expected an Anthropic haiku model, got: {msg}"
+    );
 }
 
 #[tokio::test]
@@ -98,7 +102,9 @@ async fn engine_keeps_model_when_routing_disabled() {
     let mut saw_router = false;
     while let Some(ev) = h.next_event().await {
         if let agent_tui_protocol::Event::Status { message, .. } = &ev {
-            if message.starts_with("router:") { saw_router = true; }
+            if message.starts_with("router:") {
+                saw_router = true;
+            }
         }
         if matches!(ev, agent_tui_protocol::Event::TurnComplete { .. }) {
             break;

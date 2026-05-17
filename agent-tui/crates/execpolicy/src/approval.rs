@@ -34,7 +34,9 @@ pub struct ApprovalGate {
 }
 
 impl ApprovalGate {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     /// Register a request; returns the receiver to await on.
     pub fn register(&self, req: &ApprovalRequest) -> oneshot::Receiver<Decision> {

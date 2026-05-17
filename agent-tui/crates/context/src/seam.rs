@@ -57,7 +57,10 @@ pub struct SeamManager {
 
 impl SeamManager {
     pub fn new(config: SeamConfig) -> Self {
-        Self { config, last_applied: None }
+        Self {
+            config,
+            last_applied: None,
+        }
     }
 
     /// Return the next-higher level that hasn't been applied yet, if the
@@ -177,8 +180,10 @@ mod tests {
 
     #[test]
     fn levels_escalate() {
-        let mut m = SeamManager::default();
-        m.last_applied = Some(SeamLevel::L1);
+        let mut m = SeamManager {
+            last_applied: Some(SeamLevel::L1),
+            ..Default::default()
+        };
         let mut msgs: Vec<Message> = (0..80).map(|_| long_user_msg(20_000)).collect();
         let out = m.evaluate(&msgs).unwrap();
         assert_eq!(out.level, SeamLevel::L2);

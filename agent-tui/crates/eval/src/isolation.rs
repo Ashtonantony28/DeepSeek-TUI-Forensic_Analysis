@@ -93,7 +93,11 @@ impl IsolatedWorkspace {
                 tokio::fs::write(&test_file, instance.test_patch.as_bytes())
                     .await
                     .context("write synthetic test file")?;
-                Ok(Self { root, mode, container_name: String::new() })
+                Ok(Self {
+                    root,
+                    mode,
+                    container_name: String::new(),
+                })
             }
 
             IsolationMode::GitClone => {
@@ -120,7 +124,11 @@ impl IsolatedWorkspace {
                         instance.repo
                     );
                 }
-                Ok(Self { root, mode, container_name: String::new() })
+                Ok(Self {
+                    root,
+                    mode,
+                    container_name: String::new(),
+                })
             }
 
             IsolationMode::Docker => {
@@ -132,11 +140,16 @@ impl IsolatedWorkspace {
                 let container = tag.clone();
                 let status = Command::new("docker")
                     .args([
-                        "run", "-d",
-                        "--name", &container,
-                        "--workdir", "/testbed",
+                        "run",
+                        "-d",
+                        "--name",
+                        &container,
+                        "--workdir",
+                        "/testbed",
                         &image,
-                        "/bin/bash", "-c", "sleep 7200",
+                        "/bin/bash",
+                        "-c",
+                        "sleep 7200",
                     ])
                     .status()
                     .await
@@ -196,8 +209,12 @@ impl IsolatedWorkspace {
                     .context("docker cp")?;
                 let status = Command::new("docker")
                     .args([
-                        "exec", &self.container_name,
-                        "git", "apply", "--whitespace=fix", ".agent-tui-patch.diff",
+                        "exec",
+                        &self.container_name,
+                        "git",
+                        "apply",
+                        "--whitespace=fix",
+                        ".agent-tui-patch.diff",
                     ])
                     .status()
                     .await
@@ -291,13 +308,19 @@ mod tests {
         let ws_a = IsolatedWorkspace::setup(&instances[0], IsolationMode::DryRun)
             .await
             .unwrap();
-        assert!(ws_a.run_tests(&instances[0]).await, "pass instance should return true");
+        assert!(
+            ws_a.run_tests(&instances[0]).await,
+            "pass instance should return true"
+        );
         ws_a.cleanup().await.unwrap();
 
         let ws_b = IsolatedWorkspace::setup(&instances[1], IsolationMode::DryRun)
             .await
             .unwrap();
-        assert!(!ws_b.run_tests(&instances[1]).await, "fail instance should return false");
+        assert!(
+            !ws_b.run_tests(&instances[1]).await,
+            "fail instance should return false"
+        );
         ws_b.cleanup().await.unwrap();
     }
 }

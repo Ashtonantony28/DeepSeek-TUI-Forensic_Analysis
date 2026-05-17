@@ -19,7 +19,7 @@ pub mod seam;
 pub mod tokens;
 
 pub use capacity::{CapacityConfig, CapacityController, CapacityObservation};
-pub use compaction::{Compactor, CompactionConfig, CompactionResult};
+pub use compaction::{CompactionConfig, CompactionResult, Compactor};
 pub use cycle::{CycleConfig, CycleManager, CycleOutcome};
 pub use seam::{SeamConfig, SeamLevel, SeamManager, SeamOutcome};
 pub use tokens::estimate_tokens;

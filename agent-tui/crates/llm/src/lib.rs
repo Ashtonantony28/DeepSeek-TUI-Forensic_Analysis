@@ -13,8 +13,7 @@ mod adapters;
 
 pub use adapters::{
     anthropic::AnthropicClient, deepseek::DeepSeekClient, groq::GroqClient, mock::MockClient,
-    ollama::OllamaClient, openai::OpenAiClient, openai_compat::OpenAiCompatClient,
-    xai::XaiClient,
+    ollama::OllamaClient, openai::OpenAiClient, openai_compat::OpenAiCompatClient, xai::XaiClient,
 };
 
 use agent_tui_protocol::{ModelInfo, Provider};

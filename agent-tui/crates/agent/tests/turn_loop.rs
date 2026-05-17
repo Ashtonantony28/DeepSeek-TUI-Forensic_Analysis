@@ -11,7 +11,12 @@ async fn text_only_turn_emits_delta_and_complete() {
     mock.push_text("hello!");
     let session = Session::new("mock-model");
     let (reg, ctx) = ToolRegistry::with_builtins(Utf8PathBuf::from("/tmp"));
-    let engine = Engine::new(session, mock.clone() as Arc<dyn LlmClient>, Arc::new(reg), Arc::new(ctx));
+    let engine = Engine::new(
+        session,
+        mock.clone() as Arc<dyn LlmClient>,
+        Arc::new(reg),
+        Arc::new(ctx),
+    );
     let h = engine.spawn();
     h.send(Op::Submit {
         content: "say hi".into(),
@@ -25,10 +30,14 @@ async fn text_only_turn_emits_delta_and_complete() {
     let mut got_text = false;
     let mut got_complete = false;
     for _ in 0..32 {
-        let Some(ev) = h.next_event().await else { break };
+        let Some(ev) = h.next_event().await else {
+            break;
+        };
         match ev {
             Event::Delta { delta, .. } => {
-                if delta.contains("hello") { got_text = true; }
+                if delta.contains("hello") {
+                    got_text = true;
+                }
             }
             Event::TurnComplete { .. } => {
                 got_complete = true;
@@ -55,7 +64,12 @@ async fn tool_call_turn_executes_tool() {
     let session = Session::new("mock-model");
     let (reg, mut ctx) = ToolRegistry::with_builtins(root.clone());
     ctx.workspace_root = root;
-    let engine = Engine::new(session, mock.clone() as Arc<dyn LlmClient>, Arc::new(reg), Arc::new(ctx));
+    let engine = Engine::new(
+        session,
+        mock.clone() as Arc<dyn LlmClient>,
+        Arc::new(reg),
+        Arc::new(ctx),
+    );
     let h = engine.spawn();
     h.send(Op::Submit {
         content: "summarize README".into(),
@@ -69,7 +83,9 @@ async fn tool_call_turn_executes_tool() {
     let mut saw_tool = false;
     let mut saw_complete = false;
     for _ in 0..64 {
-        let Some(ev) = h.next_event().await else { break };
+        let Some(ev) = h.next_event().await else {
+            break;
+        };
         match ev {
             Event::ToolCallStarted { name, .. } => {
                 assert_eq!(name, "read_file");

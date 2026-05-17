@@ -1,0 +1,27 @@
+#!/usr/bin/env node
+// Thin launcher — delegates to the downloaded native binary.
+// If the binary is missing (postinstall failed), falls back to a
+// helpful error message.
+
+"use strict";
+
+const path = require("path");
+const fs = require("fs");
+const { spawnSync } = require("child_process");
+
+const binPath = path.join(
+  __dirname,
+  process.platform === "win32" ? "agent-tui.exe" : "agent-tui"
+);
+
+if (!fs.existsSync(binPath)) {
+  console.error(
+    "agent-tui binary not found. The postinstall script may have failed.\n" +
+      "Try reinstalling: npm install -g agent-tui\n" +
+      "Or build from source: cargo install agent-tui-cli"
+  );
+  process.exit(1);
+}
+
+const result = spawnSync(binPath, process.argv.slice(2), { stdio: "inherit" });
+process.exit(result.status ?? 1);

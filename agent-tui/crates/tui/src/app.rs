@@ -36,8 +36,15 @@ pub enum TranscriptEntry {
     User(String),
     AssistantText(String),
     AssistantThinking(String),
-    ToolCall { name: String, input: String },
-    ToolResult { name: String, output: String, is_error: bool },
+    ToolCall {
+        name: String,
+        input: String,
+    },
+    ToolResult {
+        name: String,
+        output: String,
+        is_error: bool,
+    },
     System(String),
 }
 
@@ -74,7 +81,8 @@ impl App {
                     s.push_str(&delta);
                     return;
                 }
-                self.transcript.push(TranscriptEntry::AssistantThinking(delta));
+                self.transcript
+                    .push(TranscriptEntry::AssistantThinking(delta));
             }
         }
     }
@@ -148,7 +156,11 @@ pub async fn run_tui(
     let res = event_loop(&mut term, &mut app, &handle).await;
 
     disable_raw_mode()?;
-    execute!(term.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)?;
+    execute!(
+        term.backend_mut(),
+        LeaveAlternateScreen,
+        DisableMouseCapture
+    )?;
     term.show_cursor()?;
     let _ = handle.send(Op::Shutdown).await;
     res
@@ -176,7 +188,12 @@ async fn event_loop(
                         input: input.to_string(),
                     });
                 }
-                Event::ToolCallFinished { name, output, is_error, .. } => {
+                Event::ToolCallFinished {
+                    name,
+                    output,
+                    is_error,
+                    ..
+                } => {
                     app.transcript.push(TranscriptEntry::ToolResult {
                         name,
                         output: output.to_string(),
@@ -186,7 +203,11 @@ async fn event_loop(
                 Event::TurnComplete { .. } => app.status = "ready".into(),
                 Event::TurnAborted { reason, .. } => app.status = format!("aborted: {reason}"),
                 Event::Status { message, .. } => app.status = message,
-                Event::SeamApplied { level, tokens_archived, .. } => {
+                Event::SeamApplied {
+                    level,
+                    tokens_archived,
+                    ..
+                } => {
                     app.transcript.push(TranscriptEntry::System(format!(
                         "seam L{level} archived ~{tokens_archived} tokens"
                     )));
@@ -196,7 +217,10 @@ async fn event_loop(
                         "cycle advanced {from} -> {to}"
                     )));
                 }
-                Event::CompactionApplied { before_tokens, after_tokens } => {
+                Event::CompactionApplied {
+                    before_tokens,
+                    after_tokens,
+                } => {
                     app.transcript.push(TranscriptEntry::System(format!(
                         "compaction {before_tokens} -> {after_tokens} tokens"
                     )));
@@ -209,7 +233,11 @@ async fn event_loop(
                     app.plan_goal = Some(goal);
                     app.plan_items = items;
                 }
-                Event::DarsResult { winner_index, branch_count, votes } => {
+                Event::DarsResult {
+                    winner_index,
+                    branch_count,
+                    votes,
+                } => {
                     app.transcript.push(TranscriptEntry::System(format!(
                         "dars: winner=[{winner_index}] of {branch_count} branches, votes={votes:?}"
                     )));
@@ -242,12 +270,14 @@ async fn event_loop(
                             } else if !app.composer.trim().is_empty() {
                                 let content = std::mem::take(&mut app.composer);
                                 app.transcript.push(TranscriptEntry::User(content.clone()));
-                                let _ = handle.send(Op::Submit {
-                                    content,
-                                    mode: app.mode,
-                                    model: None,
-                                    provider: None,
-                                }).await;
+                                let _ = handle
+                                    .send(Op::Submit {
+                                        content,
+                                        mode: app.mode,
+                                        model: None,
+                                        provider: None,
+                                    })
+                                    .await;
                             }
                         }
                         KeyCode::Backspace => {

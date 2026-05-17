@@ -22,7 +22,7 @@
 //! interactive agent all use the same code path.
 
 use agent_tui_llm::LlmClient;
-use agent_tui_retrieval::{Retriever, RetrievalHit};
+use agent_tui_retrieval::{RetrievalHit, Retriever};
 use agent_tui_subagent::SubAgentManager;
 use async_trait::async_trait;
 use camino::Utf8PathBuf;
@@ -138,10 +138,7 @@ impl HierarchicalPipeline {
         self
     }
 
-    pub async fn localise(
-        &self,
-        issue: &Issue,
-    ) -> Result<Vec<LocalisedCandidate>, PipelineError> {
+    pub async fn localise(&self, issue: &Issue) -> Result<Vec<LocalisedCandidate>, PipelineError> {
         let query = format!("{}\n{}", issue.title, issue.body);
         let hits: Vec<RetrievalHit> = self
             .retriever
@@ -165,7 +162,11 @@ impl HierarchicalPipeline {
             }
         }
         let mut out: Vec<LocalisedCandidate> = by_path.into_values().collect();
-        out.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        out.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         out.truncate(self.max_candidates);
         Ok(out)
     }
@@ -181,7 +182,9 @@ impl HierarchicalPipeline {
         let mgr = SubAgentManager::new(self.llm.clone());
         let mut last_err: Option<String> = None;
         for _ in 0..self.repair_attempts.max(1) {
-            let id = mgr.open(&self.model, Some(REPAIR_SYSTEM_PROMPT.into())).await;
+            let id = mgr
+                .open(&self.model, Some(REPAIR_SYSTEM_PROMPT.into()))
+                .await;
             let prompt = build_repair_prompt(issue, candidates);
             let res = mgr.eval(&id, prompt).await;
             mgr.close(&id).await;
@@ -203,9 +206,15 @@ impl HierarchicalPipeline {
         }
     }
 
-    pub async fn validate(&self, patch: &Patch, ctx: &PipelineContext) -> Result<(), PipelineError> {
+    pub async fn validate(
+        &self,
+        patch: &Patch,
+        ctx: &PipelineContext,
+    ) -> Result<(), PipelineError> {
         if !looks_like_unified_diff(&patch.unified_diff) {
-            return Err(PipelineError::Validation("patch is not a unified diff".into()));
+            return Err(PipelineError::Validation(
+                "patch is not a unified diff".into(),
+            ));
         }
         if let Some(v) = &self.validator {
             v.validate(patch, ctx)
@@ -307,11 +316,7 @@ mod tests {
 
     #[async_trait]
     impl Retriever for FakeRetriever {
-        async fn search(
-            &self,
-            _q: &str,
-            _k: usize,
-        ) -> Result<Vec<RetrievalHit>, RetrievalError> {
+        async fn search(&self, _q: &str, _k: usize) -> Result<Vec<RetrievalHit>, RetrievalError> {
             Ok(self.0.clone())
         }
     }
@@ -356,7 +361,11 @@ mod tests {
             hit("b.rs", 2, "fn baz()", 0.5),
         ])) as Arc<dyn Retriever>;
         let p = HierarchicalPipeline::new(mock as Arc<dyn LlmClient>, r, "mock-model");
-        let issue = Issue { title: "x".into(), body: "y".into(), failing_tests: vec![] };
+        let issue = Issue {
+            title: "x".into(),
+            body: "y".into(),
+            failing_tests: vec![],
+        };
         let cands = p.localise(&issue).await.unwrap();
         assert_eq!(cands.len(), 2);
         assert_eq!(cands[0].path.to_string(), "a.rs");
@@ -371,15 +380,17 @@ mod tests {
             "Here's the fix:\n```diff\ndiff --git a/a.rs b/a.rs\n\
             --- a/a.rs\n+++ b/a.rs\n@@ -1 +1 @@\n-old\n+new\n```",
         );
-        let r = Arc::new(FakeRetriever(vec![hit("a.rs", 1, "fn foo()", 1.0)]))
-            as Arc<dyn Retriever>;
+        let r =
+            Arc::new(FakeRetriever(vec![hit("a.rs", 1, "fn foo()", 1.0)])) as Arc<dyn Retriever>;
         let p = HierarchicalPipeline::new(mock as Arc<dyn LlmClient>, r, "mock-model");
         let issue = Issue {
             title: "foo broken".into(),
             body: "calling foo() returns wrong value".into(),
             failing_tests: vec!["a::foo_works".into()],
         };
-        let ctx = PipelineContext { workspace_root: Utf8PathBuf::from(".") };
+        let ctx = PipelineContext {
+            workspace_root: Utf8PathBuf::from("."),
+        };
         let patch = p.run(&issue, &ctx).await.unwrap();
         assert!(patch.unified_diff.contains("diff --git"));
         assert!(patch.unified_diff.contains("@@"));
@@ -389,11 +400,17 @@ mod tests {
     async fn repair_errors_when_model_yields_no_diff() {
         let mock = Arc::new(MockClient::new());
         mock.push_text("Sorry, I can't help with that.");
-        let r = Arc::new(FakeRetriever(vec![hit("a.rs", 1, "fn foo()", 1.0)]))
-            as Arc<dyn Retriever>;
+        let r =
+            Arc::new(FakeRetriever(vec![hit("a.rs", 1, "fn foo()", 1.0)])) as Arc<dyn Retriever>;
         let p = HierarchicalPipeline::new(mock as Arc<dyn LlmClient>, r, "mock-model");
-        let issue = Issue { title: "x".into(), body: "y".into(), failing_tests: vec![] };
-        let ctx = PipelineContext { workspace_root: Utf8PathBuf::from(".") };
+        let issue = Issue {
+            title: "x".into(),
+            body: "y".into(),
+            failing_tests: vec![],
+        };
+        let ctx = PipelineContext {
+            workspace_root: Utf8PathBuf::from("."),
+        };
         let err = p.run(&issue, &ctx).await.unwrap_err();
         assert!(matches!(err, PipelineError::NoDiff));
     }
@@ -412,8 +429,14 @@ mod tests {
         let r = Arc::new(FakeRetriever(vec![hit("a", 1, "x", 1.0)])) as Arc<dyn Retriever>;
         let p = HierarchicalPipeline::new(mock as Arc<dyn LlmClient>, r, "mock-model")
             .with_validator(Arc::new(Rejector));
-        let issue = Issue { title: "x".into(), body: "y".into(), failing_tests: vec![] };
-        let ctx = PipelineContext { workspace_root: Utf8PathBuf::from(".") };
+        let issue = Issue {
+            title: "x".into(),
+            body: "y".into(),
+            failing_tests: vec![],
+        };
+        let ctx = PipelineContext {
+            workspace_root: Utf8PathBuf::from("."),
+        };
         let err = p.run(&issue, &ctx).await.unwrap_err();
         assert!(matches!(err, PipelineError::Validation(_)));
     }
@@ -423,8 +446,14 @@ mod tests {
         let mock = Arc::new(MockClient::new());
         let r = Arc::new(FakeRetriever(vec![])) as Arc<dyn Retriever>;
         let p = HierarchicalPipeline::new(mock as Arc<dyn LlmClient>, r, "mock-model");
-        let issue = Issue { title: "x".into(), body: "y".into(), failing_tests: vec![] };
-        let ctx = PipelineContext { workspace_root: Utf8PathBuf::from(".") };
+        let issue = Issue {
+            title: "x".into(),
+            body: "y".into(),
+            failing_tests: vec![],
+        };
+        let ctx = PipelineContext {
+            workspace_root: Utf8PathBuf::from("."),
+        };
         let err = p.run(&issue, &ctx).await.unwrap_err();
         assert!(matches!(err, PipelineError::NoCandidates));
     }

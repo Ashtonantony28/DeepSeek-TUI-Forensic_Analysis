@@ -26,11 +26,19 @@ pub struct RepoGraph {
 
 impl RepoGraph {
     pub fn empty() -> Self {
-        Self { files: Vec::new(), edges: Vec::new(), file_index: HashMap::new() }
+        Self {
+            files: Vec::new(),
+            edges: Vec::new(),
+            file_index: HashMap::new(),
+        }
     }
 
-    pub fn len(&self) -> usize { self.files.len() }
-    pub fn is_empty(&self) -> bool { self.files.is_empty() }
+    pub fn len(&self) -> usize {
+        self.files.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.files.is_empty()
+    }
 
     pub fn index_of(&self, path: &Utf8Path) -> Option<usize> {
         self.file_index.get(path).copied()
@@ -40,7 +48,10 @@ impl RepoGraph {
 pub fn build(root: &Utf8Path) -> RepoGraph {
     let mut g = RepoGraph::empty();
     // First pass: collect candidate source files.
-    for dent in WalkBuilder::new(root.as_std_path()).build().filter_map(Result::ok) {
+    for dent in WalkBuilder::new(root.as_std_path())
+        .build()
+        .filter_map(Result::ok)
+    {
         if !dent.file_type().is_some_and(|t| t.is_file()) {
             continue;
         }
@@ -61,7 +72,9 @@ pub fn build(root: &Utf8Path) -> RepoGraph {
     // Second pass: parse imports.
     for (i, rel) in g.files.clone().iter().enumerate() {
         let abs = root.join(rel);
-        let Ok(body) = std::fs::read_to_string(abs.as_std_path()) else { continue };
+        let Ok(body) = std::fs::read_to_string(abs.as_std_path()) else {
+            continue;
+        };
         let imports = extract_imports(rel, &body);
         for module in imports {
             if let Some(target) = resolve_import(&g, rel, &module) {
@@ -95,11 +108,19 @@ pub fn pagerank(g: &RepoGraph, query: Option<&str>, iters: u32) -> Vec<f32> {
             let mut t: Vec<f32> = g
                 .files
                 .iter()
-                .map(|p| if p.as_str().to_lowercase().contains(&ql) { 1.0 } else { 0.0 })
+                .map(|p| {
+                    if p.as_str().to_lowercase().contains(&ql) {
+                        1.0
+                    } else {
+                        0.0
+                    }
+                })
                 .collect();
             let sum: f32 = t.iter().sum();
             if sum > 0.0 {
-                for v in &mut t { *v /= sum; }
+                for v in &mut t {
+                    *v /= sum;
+                }
             } else {
                 t = vec![1.0 / n as f32; n];
             }
@@ -121,8 +142,7 @@ pub fn pagerank(g: &RepoGraph, query: Option<&str>, iters: u32) -> Vec<f32> {
             }
         }
         for i in 0..n {
-            next[i] = damping * (next[i] + dangling / n as f32)
-                + (1.0 - damping) * teleport[i];
+            next[i] = damping * (next[i] + dangling / n as f32) + (1.0 - damping) * teleport[i];
         }
         rank = next;
     }
@@ -131,12 +151,19 @@ pub fn pagerank(g: &RepoGraph, query: Option<&str>, iters: u32) -> Vec<f32> {
 
 // ----- import extraction -----
 
-static RUST_USE: Lazy<Regex> = Lazy::new(|| Regex::new(r"\buse\s+([A-Za-z_][A-Za-z0-9_:]*)").unwrap());
-static RUST_MOD: Lazy<Regex> = Lazy::new(|| Regex::new(r"\bmod\s+([A-Za-z_][A-Za-z0-9_]+)\s*;").unwrap());
-static PY_IMPORT: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*(?:from\s+([A-Za-z0-9_.]+)\s+import|import\s+([A-Za-z0-9_.]+))").unwrap());
-static JS_IMPORT: Lazy<Regex> = Lazy::new(|| Regex::new(r#"(?:import\s+[^"']*from\s*|require\s*\(\s*)["']([^"']+)["']"#).unwrap());
+static RUST_USE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"\buse\s+([A-Za-z_][A-Za-z0-9_:]*)").unwrap());
+static RUST_MOD: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"\bmod\s+([A-Za-z_][A-Za-z0-9_]+)\s*;").unwrap());
+static PY_IMPORT: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^\s*(?:from\s+([A-Za-z0-9_.]+)\s+import|import\s+([A-Za-z0-9_.]+))").unwrap()
+});
+static JS_IMPORT: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r#"(?:import\s+[^"']*from\s*|require\s*\(\s*)["']([^"']+)["']"#).unwrap()
+});
 static GO_IMPORT: Lazy<Regex> = Lazy::new(|| Regex::new(r#"^\s*(?:import\s+)?"([^"]+)""#).unwrap());
-static JAVA_IMPORT: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\s*import\s+([A-Za-z0-9_.]+)\s*;").unwrap());
+static JAVA_IMPORT: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^\s*import\s+([A-Za-z0-9_.]+)\s*;").unwrap());
 
 fn extract_imports(path: &Utf8Path, body: &str) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
@@ -146,11 +173,15 @@ fn extract_imports(path: &Utf8Path, body: &str) -> Vec<String> {
             for cap in RUST_USE.captures_iter(body) {
                 if let Some(m) = cap.get(1) {
                     let head = m.as_str().split("::").next().unwrap_or("").to_string();
-                    if !head.is_empty() { out.push(head); }
+                    if !head.is_empty() {
+                        out.push(head);
+                    }
                 }
             }
             for cap in RUST_MOD.captures_iter(body) {
-                if let Some(m) = cap.get(1) { out.push(m.as_str().to_string()); }
+                if let Some(m) = cap.get(1) {
+                    out.push(m.as_str().to_string());
+                }
             }
         }
         "py" => {
@@ -173,14 +204,18 @@ fn extract_imports(path: &Utf8Path, body: &str) -> Vec<String> {
         "go" => {
             for line in body.lines() {
                 if let Some(cap) = GO_IMPORT.captures(line) {
-                    if let Some(m) = cap.get(1) { out.push(m.as_str().to_string()); }
+                    if let Some(m) = cap.get(1) {
+                        out.push(m.as_str().to_string());
+                    }
                 }
             }
         }
         "java" => {
             for line in body.lines() {
                 if let Some(cap) = JAVA_IMPORT.captures(line) {
-                    if let Some(m) = cap.get(1) { out.push(m.as_str().to_string()); }
+                    if let Some(m) = cap.get(1) {
+                        out.push(m.as_str().to_string());
+                    }
                 }
             }
         }
@@ -268,7 +303,10 @@ mod tests {
         // b is depended on by both a and c → should outrank either of them.
         assert!(scores[b] > scores[a]);
         let sum: f32 = scores.iter().sum();
-        assert!((sum - 1.0).abs() < 0.05, "scores should approximately sum to 1, got {sum}");
+        assert!(
+            (sum - 1.0).abs() < 0.05,
+            "scores should approximately sum to 1, got {sum}"
+        );
     }
 
     #[test]

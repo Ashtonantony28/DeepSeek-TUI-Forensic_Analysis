@@ -1,15 +1,11 @@
 //! Engine task. Owns a `Session` and drives the turn loop.
 
-use crate::auto_test::{self, MAX_RETRIES, TestRunner};
+use crate::auto_test::{self, TestRunner, MAX_RETRIES};
 use crate::compactor::FlashCompactor;
 use crate::parser::parse_tool_input;
 use crate::session::Session;
-use agent_tui_context::{
-    CapacityController, CycleManager, SeamManager, estimate_tokens,
-};
-use agent_tui_llm::{
-    ChatRequest, LlmClient, StreamEvent, ToolSchema as LlmToolSchema,
-};
+use agent_tui_context::{estimate_tokens, CapacityController, CycleManager, SeamManager};
+use agent_tui_llm::{ChatRequest, LlmClient, StreamEvent, ToolSchema as LlmToolSchema};
 use agent_tui_protocol::{
     AppMode, ContentBlock, DeltaChannel, Event, GuardrailAction, Message, Op, PlanItem, Provider,
     RiskBand, Role, ToolCallId, TurnId,
@@ -18,7 +14,7 @@ use agent_tui_tools::{Tool, ToolContext, ToolRegistry};
 use futures::StreamExt;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{Mutex, mpsc};
+use tokio::sync::{mpsc, Mutex};
 
 pub struct Engine {
     pub session: Session,
@@ -82,8 +78,9 @@ impl Engine {
         tool_ctx: Arc<ToolContext>,
     ) -> Self {
         let provider = llm.provider();
-        let compactor_model =
-            crate::routing::Router::new(provider).model_for_tier(crate::routing::Tier::Small).to_string();
+        let compactor_model = crate::routing::Router::new(provider)
+            .model_for_tier(crate::routing::Tier::Small)
+            .to_string();
         Self {
             session,
             mode: AppMode::Agent,
@@ -122,7 +119,12 @@ impl Engine {
     async fn run(mut self, mut op_rx: mpsc::Receiver<Op>, event_tx: mpsc::Sender<Event>) {
         while let Some(op) = op_rx.recv().await {
             match op {
-                Op::Submit { content, mode, model, provider: _ } => {
+                Op::Submit {
+                    content,
+                    mode,
+                    model,
+                    provider: _,
+                } => {
                     self.mode = mode;
                     if let Some(m) = model {
                         // User-pinned model bypasses the router.
@@ -150,19 +152,23 @@ impl Engine {
                     }
                 }
                 Op::Cancel => {
-                    let _ = event_tx.send(Event::Status {
-                        turn_id: None,
-                        message: "cancel acknowledged".into(),
-                    }).await;
+                    let _ = event_tx
+                        .send(Event::Status {
+                            turn_id: None,
+                            message: "cancel acknowledged".into(),
+                        })
+                        .await;
                 }
                 Op::ChangeMode { mode } => self.mode = mode,
                 Op::SetModel { model, .. } => self.session.model = model,
                 Op::CompactContext => {
                     // Compaction stub: actual flash call wires in Phase 3.
-                    let _ = event_tx.send(Event::Status {
-                        turn_id: None,
-                        message: "compaction queued".into(),
-                    }).await;
+                    let _ = event_tx
+                        .send(Event::Status {
+                            turn_id: None,
+                            message: "compaction queued".into(),
+                        })
+                        .await;
                 }
                 Op::AcceptApproval { id, decision } => {
                     self.tool_ctx
@@ -173,10 +179,12 @@ impl Engine {
                     if self.dars_enabled {
                         self.run_dars_pass(prompt, &event_tx).await;
                     } else {
-                        let _ = event_tx.send(Event::Status {
-                            turn_id: None,
-                            message: "sub-agent spawn: dars disabled".into(),
-                        }).await;
+                        let _ = event_tx
+                            .send(Event::Status {
+                                turn_id: None,
+                                message: "sub-agent spawn: dars disabled".into(),
+                            })
+                            .await;
                     }
                 }
                 Op::Shutdown => break,
@@ -186,25 +194,31 @@ impl Engine {
 
     async fn run_turn(&mut self, event_tx: &mpsc::Sender<Event>) -> Result<(), String> {
         let turn_id = TurnId::new();
-        let _ = event_tx.send(Event::TurnStarted { turn_id: turn_id.clone() }).await;
+        let _ = event_tx
+            .send(Event::TurnStarted {
+                turn_id: turn_id.clone(),
+            })
+            .await;
 
         // -- Pre-turn: context capacity & seam check --
         let total_tokens = estimate_tokens(&self.session.messages);
         let used_ratio = total_tokens as f32 / self.model_context_window.max(1) as f32;
-        let band = self.capacity.observe(agent_tui_context::CapacityObservation {
-            context_used_ratio: used_ratio,
-            tool_calls_recent: 0,
-            consecutive_tool_errors: 0,
-        });
+        let band = self
+            .capacity
+            .observe(agent_tui_context::CapacityObservation {
+                context_used_ratio: used_ratio,
+                tool_calls_recent: 0,
+                consecutive_tool_errors: 0,
+            });
         let action = self.capacity.decide(0, band);
-        if !matches!(action, GuardrailAction::NoIntervention)
-            || !matches!(band, RiskBand::Low)
-        {
-            let _ = event_tx.send(Event::RiskBandChanged {
-                turn_id: turn_id.clone(),
-                band,
-                action,
-            }).await;
+        if !matches!(action, GuardrailAction::NoIntervention) || !matches!(band, RiskBand::Low) {
+            let _ = event_tx
+                .send(Event::RiskBandChanged {
+                    turn_id: turn_id.clone(),
+                    band,
+                    action,
+                })
+                .await;
         }
 
         // Seam check (non-destructive). 3.9: when compaction is enabled,
@@ -215,16 +229,15 @@ impl Engine {
             let level = outcome.level as u8;
             let archived = outcome.head_token_estimate;
             let summary = self.maybe_summarize_seam(&outcome).await;
-            self.seam.apply_summary(
-                &mut self.session.messages,
-                &outcome,
-                summary,
-            );
-            let _ = event_tx.send(Event::SeamApplied {
-                turn_id: turn_id.clone(),
-                level,
-                tokens_archived: archived,
-            }).await;
+            self.seam
+                .apply_summary(&mut self.session.messages, &outcome, summary);
+            let _ = event_tx
+                .send(Event::SeamApplied {
+                    turn_id: turn_id.clone(),
+                    level,
+                    tokens_archived: archived,
+                })
+                .await;
         }
 
         // Choose active tool set (Plan-mode narrows to read-only + planning).
@@ -259,16 +272,23 @@ impl Engine {
             None
         };
         if memory_suffix.is_some() {
-            let _ = event_tx.send(Event::Status {
-                turn_id: Some(turn_id.clone()),
-                message: format!(
-                    "memory: injected {} lesson(s)",
-                    self.tool_ctx.memory.retrieve(
-                        latest_user_text(&self.session.messages).unwrap_or_default().as_str(),
-                        3,
-                    ).len()
-                ),
-            }).await;
+            let _ = event_tx
+                .send(Event::Status {
+                    turn_id: Some(turn_id.clone()),
+                    message: format!(
+                        "memory: injected {} lesson(s)",
+                        self.tool_ctx
+                            .memory
+                            .retrieve(
+                                latest_user_text(&self.session.messages)
+                                    .unwrap_or_default()
+                                    .as_str(),
+                                3,
+                            )
+                            .len()
+                    ),
+                })
+                .await;
         }
 
         // -- Stream from LLM. Loop until end_turn (no tool calls). --
@@ -299,27 +319,33 @@ impl Engine {
                 let ev = match ev_res {
                     Ok(e) => e,
                     Err(e) => {
-                        let _ = event_tx.send(Event::Error {
-                            message: format!("stream error: {e}"),
-                        }).await;
+                        let _ = event_tx
+                            .send(Event::Error {
+                                message: format!("stream error: {e}"),
+                            })
+                            .await;
                         return Err(format!("stream: {e}"));
                     }
                 };
                 match ev {
                     StreamEvent::TextDelta(t) => {
-                        let _ = event_tx.send(Event::Delta {
-                            turn_id: turn_id.clone(),
-                            channel: DeltaChannel::Text,
-                            delta: t.clone(),
-                        }).await;
+                        let _ = event_tx
+                            .send(Event::Delta {
+                                turn_id: turn_id.clone(),
+                                channel: DeltaChannel::Text,
+                                delta: t.clone(),
+                            })
+                            .await;
                         assistant_text.push_str(&t);
                     }
                     StreamEvent::ThinkingDelta(t) => {
-                        let _ = event_tx.send(Event::Delta {
-                            turn_id: turn_id.clone(),
-                            channel: DeltaChannel::Thinking,
-                            delta: t,
-                        }).await;
+                        let _ = event_tx
+                            .send(Event::Delta {
+                                turn_id: turn_id.clone(),
+                                channel: DeltaChannel::Thinking,
+                                delta: t,
+                            })
+                            .await;
                     }
                     StreamEvent::ToolCallStart { id, name } => {
                         tool_calls.insert(id.clone(), (name, String::new()));
@@ -331,7 +357,9 @@ impl Engine {
                         }
                     }
                     StreamEvent::ToolCallEnd { .. } => {}
-                    StreamEvent::MessageEnd { stop_reason: sr, .. } => {
+                    StreamEvent::MessageEnd {
+                        stop_reason: sr, ..
+                    } => {
                         stop_reason = sr;
                     }
                 }
@@ -340,7 +368,9 @@ impl Engine {
             // Persist the assistant text/tool-use blocks for context.
             let mut assistant_blocks: Vec<ContentBlock> = Vec::new();
             if !assistant_text.is_empty() {
-                assistant_blocks.push(ContentBlock::Text { text: assistant_text });
+                assistant_blocks.push(ContentBlock::Text {
+                    text: assistant_text,
+                });
             }
             for id in &tool_call_order {
                 if let Some((name, buf)) = tool_calls.get(id) {
@@ -382,25 +412,29 @@ impl Engine {
                     continue;
                 };
                 let input = parse_tool_input(&buf).unwrap_or(serde_json::json!({}));
-                let _ = event_tx.send(Event::ToolCallStarted {
-                    turn_id: turn_id.clone(),
-                    tool_call_id: id.clone(),
-                    name: name.clone(),
-                    input: input.clone(),
-                }).await;
+                let _ = event_tx
+                    .send(Event::ToolCallStarted {
+                        turn_id: turn_id.clone(),
+                        tool_call_id: id.clone(),
+                        name: name.clone(),
+                        input: input.clone(),
+                    })
+                    .await;
                 let is_destructive = !tool.is_read_only();
                 let result = tool.execute(input.clone(), &self.tool_ctx).await;
                 let (output_str, is_error) = match result {
                     Ok(r) => (r.content, r.is_error),
                     Err(e) => (format!("error: {e}"), true),
                 };
-                let _ = event_tx.send(Event::ToolCallFinished {
-                    turn_id: turn_id.clone(),
-                    tool_call_id: id.clone(),
-                    name: name.clone(),
-                    output: serde_json::json!(output_str),
-                    is_error,
-                }).await;
+                let _ = event_tx
+                    .send(Event::ToolCallFinished {
+                        turn_id: turn_id.clone(),
+                        tool_call_id: id.clone(),
+                        name: name.clone(),
+                        output: serde_json::json!(output_str),
+                        is_error,
+                    })
+                    .await;
                 tool_results.push(ContentBlock::ToolResult {
                     tool_use_id: id.clone(),
                     content: output_str.clone(),
@@ -423,10 +457,7 @@ impl Engine {
                 // 3.1 — post-tool checkpoint for successful destructive calls.
                 if is_destructive && !is_error && self.checkpoint_enabled {
                     any_destructive_success = true;
-                    let _ = self
-                        .tool_ctx
-                        .checkpoints
-                        .create(turn_seq(&turn_id), &name);
+                    let _ = self.tool_ctx.checkpoints.create(turn_seq(&turn_id), &name);
                 }
             }
             self.session.messages.push(Message {
@@ -447,14 +478,13 @@ impl Engine {
         // Cycle (hard) — try at end of turn if needed. 3.9: real briefing
         // produced by the Flash compactor when enabled.
         let briefing = self.maybe_summarize_cycle().await;
-        if let Some(outcome) = self
-            .cycle
-            .maybe_cycle(&mut self.session.messages, briefing)
-        {
-            let _ = event_tx.send(Event::CycleAdvanced {
-                from: outcome.from,
-                to: outcome.to,
-            }).await;
+        if let Some(outcome) = self.cycle.maybe_cycle(&mut self.session.messages, briefing) {
+            let _ = event_tx
+                .send(Event::CycleAdvanced {
+                    from: outcome.from,
+                    to: outcome.to,
+                })
+                .await;
         }
 
         let _ = event_tx.send(Event::TurnComplete { turn_id }).await;
@@ -466,10 +496,7 @@ impl Engine {
     /// 3.9 — produce a real seam summary by invoking the Flash compactor.
     /// Falls back to a static placeholder when compaction is disabled or
     /// the LLM call fails; the seam still applies in that case.
-    async fn maybe_summarize_seam(
-        &self,
-        outcome: &agent_tui_context::SeamOutcome,
-    ) -> String {
+    async fn maybe_summarize_seam(&self, outcome: &agent_tui_context::SeamOutcome) -> String {
         if !self.compaction_enabled {
             return "[seam summary disabled]".into();
         }
@@ -520,31 +547,43 @@ impl Engine {
             max_parallel: self.dars_branch_count.max(1),
         };
         let turn_id = TurnId::new();
-        let _ = event_tx.send(Event::TurnStarted { turn_id: turn_id.clone() }).await;
-        let _ = event_tx.send(Event::Status {
-            turn_id: Some(turn_id.clone()),
-            message: format!(
-                "dars: {} branches x {} verifiers",
-                cfg.branch_count, cfg.verifier_count,
-            ),
-        }).await;
+        let _ = event_tx
+            .send(Event::TurnStarted {
+                turn_id: turn_id.clone(),
+            })
+            .await;
+        let _ = event_tx
+            .send(Event::Status {
+                turn_id: Some(turn_id.clone()),
+                message: format!(
+                    "dars: {} branches x {} verifiers",
+                    cfg.branch_count, cfg.verifier_count,
+                ),
+            })
+            .await;
         match run_dars(&mgr, &cfg, &prompt).await {
             Ok(outcome) => {
-                let _ = event_tx.send(Event::Delta {
-                    turn_id: turn_id.clone(),
-                    channel: DeltaChannel::Text,
-                    delta: outcome.winner_answer.clone(),
-                }).await;
-                let _ = event_tx.send(Event::DarsResult {
-                    winner_index: outcome.winner_index,
-                    branch_count: outcome.candidates.len(),
-                    votes: outcome.votes,
-                }).await;
+                let _ = event_tx
+                    .send(Event::Delta {
+                        turn_id: turn_id.clone(),
+                        channel: DeltaChannel::Text,
+                        delta: outcome.winner_answer.clone(),
+                    })
+                    .await;
+                let _ = event_tx
+                    .send(Event::DarsResult {
+                        winner_index: outcome.winner_index,
+                        branch_count: outcome.candidates.len(),
+                        votes: outcome.votes,
+                    })
+                    .await;
             }
             Err(e) => {
-                let _ = event_tx.send(Event::Error {
-                    message: format!("dars failed: {e}"),
-                }).await;
+                let _ = event_tx
+                    .send(Event::Error {
+                        message: format!("dars failed: {e}"),
+                    })
+                    .await;
             }
         }
         let _ = event_tx.send(Event::TurnComplete { turn_id }).await;
@@ -621,8 +660,8 @@ fn turn_seq(turn_id: &TurnId) -> u32 {
 }
 
 fn decision_to_exec(d: agent_tui_protocol::Decision) -> agent_tui_execpolicy::Decision {
-    use agent_tui_protocol::Decision as P;
     use agent_tui_execpolicy::Decision as E;
+    use agent_tui_protocol::Decision as P;
     match d {
         P::Approved => E::Approved,
         P::ApprovedForSession => E::ApprovedForSession,
@@ -632,7 +671,9 @@ fn decision_to_exec(d: agent_tui_protocol::Decision) -> agent_tui_execpolicy::De
 }
 
 #[allow(dead_code)]
-fn provider_label(p: Provider) -> &'static str { p.as_str() }
+fn provider_label(p: Provider) -> &'static str {
+    p.as_str()
+}
 
 /// 3.7 — pull `goal` + `steps[]` out of an `update_plan` tool call.
 /// Returns `None` if the input shape is unexpected so we never emit a
@@ -645,7 +686,10 @@ pub(crate) fn extract_plan(input: &serde_json::Value) -> Option<(String, Vec<Pla
         .filter_map(|s| {
             // Steps may be plain strings or {step, done} records.
             if let Some(text) = s.as_str() {
-                Some(PlanItem { step: text.to_string(), done: false })
+                Some(PlanItem {
+                    step: text.to_string(),
+                    done: false,
+                })
             } else if let Some(obj) = s.as_object() {
                 let step = obj.get("step").and_then(|v| v.as_str())?.to_string();
                 let done = obj.get("done").and_then(|v| v.as_bool()).unwrap_or(false);
@@ -663,11 +707,15 @@ pub(crate) fn extract_plan(input: &serde_json::Value) -> Option<(String, Vec<Pla
 pub(crate) fn latest_user_text(messages: &[agent_tui_protocol::Message]) -> Option<String> {
     use agent_tui_protocol::{ContentBlock, Role};
     for m in messages.iter().rev() {
-        if !matches!(m.role, Role::User) { continue; }
+        if !matches!(m.role, Role::User) {
+            continue;
+        }
         let mut buf = String::new();
         for c in &m.content {
             if let ContentBlock::Text { text } = c {
-                if !buf.is_empty() { buf.push('\n'); }
+                if !buf.is_empty() {
+                    buf.push('\n');
+                }
                 buf.push_str(text);
             }
         }

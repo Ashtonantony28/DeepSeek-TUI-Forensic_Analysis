@@ -28,24 +28,29 @@ pub struct McpToolAdapter {
 impl McpToolAdapter {
     pub fn new(descriptor: McpToolDescriptor, client: Arc<dyn McpManagedClient>) -> Self {
         let qualified = descriptor.qualified_name();
-        Self { descriptor, client, qualified }
+        Self {
+            descriptor,
+            client,
+            qualified,
+        }
     }
 }
 
 #[async_trait]
 impl Tool for McpToolAdapter {
-    fn name(&self) -> &str { &self.qualified }
+    fn name(&self) -> &str {
+        &self.qualified
+    }
 
     fn schema(&self) -> ToolSchema {
         ToolSchema::new(
             &self.qualified,
-            self.descriptor
-                .description
-                .clone()
-                .unwrap_or_else(|| format!(
+            self.descriptor.description.clone().unwrap_or_else(|| {
+                format!(
                     "MCP tool `{}` on server `{}`",
                     self.descriptor.tool_name, self.descriptor.server_name,
-                )),
+                )
+            }),
             self.descriptor.input_schema.clone(),
         )
     }
@@ -53,8 +58,12 @@ impl Tool for McpToolAdapter {
     /// MCP tools are remote and side-effectful by default. We mark them
     /// as requiring approval and treat them as non-read-only so they go
     /// through the standard approval gate.
-    fn requires_approval(&self) -> bool { true }
-    fn is_read_only(&self) -> bool { false }
+    fn requires_approval(&self) -> bool {
+        true
+    }
+    fn is_read_only(&self) -> bool {
+        false
+    }
 
     async fn execute(&self, args: Value, _ctx: &ToolContext) -> Result<ToolResult, ToolError> {
         let res = self
@@ -70,19 +79,25 @@ impl Tool for McpToolAdapter {
             let mut s = String::new();
             for block in arr {
                 if let Some(t) = block.get("text").and_then(Value::as_str) {
-                    if !s.is_empty() { s.push('\n'); }
+                    if !s.is_empty() {
+                        s.push('\n');
+                    }
                     s.push_str(t);
                 }
             }
-            if s.is_empty() { res.to_string() } else { s }
+            if s.is_empty() {
+                res.to_string()
+            } else {
+                s
+            }
         } else {
             res.to_string()
         };
-        let is_error = res
-            .get("isError")
-            .and_then(Value::as_bool)
-            .unwrap_or(false);
-        Ok(ToolResult { content: body, is_error })
+        let is_error = res.get("isError").and_then(Value::as_bool).unwrap_or(false);
+        Ok(ToolResult {
+            content: body,
+            is_error,
+        })
     }
 }
 

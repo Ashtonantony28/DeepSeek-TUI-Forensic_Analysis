@@ -52,10 +52,10 @@ pub struct EmbeddingClient {
 
 impl EmbeddingClient {
     pub fn new() -> Self {
-        let base_url = std::env::var("OLLAMA_HOST")
-            .unwrap_or_else(|_| "http://localhost:11434".into());
-        let model = std::env::var("AGENT_TUI_EMBED_MODEL")
-            .unwrap_or_else(|_| "nomic-embed-text".into());
+        let base_url =
+            std::env::var("OLLAMA_HOST").unwrap_or_else(|_| "http://localhost:11434".into());
+        let model =
+            std::env::var("AGENT_TUI_EMBED_MODEL").unwrap_or_else(|_| "nomic-embed-text".into());
         Self {
             base_url,
             model,
@@ -68,14 +68,22 @@ impl EmbeddingClient {
 
     pub async fn embed(&self, text: &str) -> Result<Vec<f32>, EmbedError> {
         #[derive(Serialize)]
-        struct Req<'a> { model: &'a str, prompt: &'a str }
+        struct Req<'a> {
+            model: &'a str,
+            prompt: &'a str,
+        }
         #[derive(Deserialize)]
-        struct Resp { embedding: Vec<f32> }
+        struct Resp {
+            embedding: Vec<f32>,
+        }
         let url = format!("{}/api/embeddings", self.base_url.trim_end_matches('/'));
         let resp = self
             .http
             .post(&url)
-            .json(&Req { model: &self.model, prompt: text })
+            .json(&Req {
+                model: &self.model,
+                prompt: text,
+            })
             .send()
             .await
             .map_err(|e| EmbedError::Network(e.to_string()))?;
@@ -83,7 +91,10 @@ impl EmbeddingClient {
         if !status.is_success() {
             return Err(EmbedError::BadStatus(status.as_u16()));
         }
-        let r: Resp = resp.json().await.map_err(|e| EmbedError::Network(e.to_string()))?;
+        let r: Resp = resp
+            .json()
+            .await
+            .map_err(|e| EmbedError::Network(e.to_string()))?;
         if r.embedding.is_empty() {
             return Err(EmbedError::Empty);
         }
@@ -105,11 +116,15 @@ impl EmbeddingClient {
 }
 
 impl Default for EmbeddingClient {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 pub fn index_path(root: &Utf8Path) -> Utf8PathBuf {
-    root.join(".agent-tui").join("index").join("embeddings.json")
+    root.join(".agent-tui")
+        .join("index")
+        .join("embeddings.json")
 }
 
 pub fn load_index(root: &Utf8Path) -> EmbeddingIndex {
@@ -145,7 +160,10 @@ pub async fn build_or_update(
     if existing.model.is_empty() {
         existing.model = client.model.clone();
     } else if existing.model != client.model {
-        existing = EmbeddingIndex { model: client.model.clone(), chunks: Vec::new() };
+        existing = EmbeddingIndex {
+            model: client.model.clone(),
+            chunks: Vec::new(),
+        };
     }
     let mut by_path: HashMap<Utf8PathBuf, Vec<EmbeddedChunk>> = HashMap::new();
     for ec in existing.chunks.drain(..) {
@@ -155,8 +173,14 @@ pub async fn build_or_update(
             .push(ec);
     }
 
-    let mut next = EmbeddingIndex { model: client.model.clone(), chunks: Vec::new() };
-    for dent in WalkBuilder::new(root.as_std_path()).build().filter_map(Result::ok) {
+    let mut next = EmbeddingIndex {
+        model: client.model.clone(),
+        chunks: Vec::new(),
+    };
+    for dent in WalkBuilder::new(root.as_std_path())
+        .build()
+        .filter_map(Result::ok)
+    {
         if !dent.file_type().is_some_and(|t| t.is_file()) {
             continue;
         }
@@ -178,14 +202,20 @@ pub async fn build_or_update(
                 continue;
             }
         }
-        let Ok(body) = std::fs::read_to_string(std_path) else { continue };
+        let Ok(body) = std::fs::read_to_string(std_path) else {
+            continue;
+        };
         for chunk in chunk_file(&rel, &body) {
             let prompt = chunk_prompt(&chunk);
             let vector = match client.embed(&prompt).await {
                 Ok(v) => v,
                 Err(_) => continue,
             };
-            next.chunks.push(EmbeddedChunk { chunk, vector, source_mtime: mtime });
+            next.chunks.push(EmbeddedChunk {
+                chunk,
+                vector,
+                source_mtime: mtime,
+            });
         }
     }
     save_index(root, &next)?;
@@ -244,7 +274,10 @@ mod tests {
     fn save_and_load_index_roundtrip() {
         let td = tempfile::tempdir().unwrap();
         let root = Utf8PathBuf::from_path_buf(td.path().to_path_buf()).unwrap();
-        let mut idx = EmbeddingIndex { model: "test".into(), chunks: Vec::new() };
+        let mut idx = EmbeddingIndex {
+            model: "test".into(),
+            chunks: Vec::new(),
+        };
         idx.chunks.push(EmbeddedChunk {
             chunk: crate::chunker::CodeChunk::file_only(&Utf8PathBuf::from("a.rs"), "fn main(){}"),
             vector: vec![0.1, 0.2, 0.3],

@@ -46,7 +46,11 @@ async fn spawn_subagent_runs_dars_and_emits_result() {
     while let Some(ev) = h.next_event().await {
         match ev {
             Event::Delta { delta, .. } => winner_text.push_str(&delta),
-            Event::DarsResult { winner_index: w, votes: v, .. } => {
+            Event::DarsResult {
+                winner_index: w,
+                votes: v,
+                ..
+            } => {
                 winner_index = Some(w);
                 votes = v;
             }
@@ -54,7 +58,11 @@ async fn spawn_subagent_runs_dars_and_emits_result() {
             _ => {}
         }
     }
-    assert_eq!(winner_index, Some(2), "expected the majority winner (index 2)");
+    assert_eq!(
+        winner_index,
+        Some(2),
+        "expected the majority winner (index 2)"
+    );
     assert_eq!(votes.len(), 3);
     assert_eq!(winner_text, "draft gamma");
 }
@@ -73,14 +81,22 @@ async fn dars_disabled_yields_status_message() {
     );
     engine.dars_enabled = false;
     let h = engine.spawn();
-    h.send(Op::SpawnSubAgent { prompt: "anything".into() }).await.unwrap();
+    h.send(Op::SpawnSubAgent {
+        prompt: "anything".into(),
+    })
+    .await
+    .unwrap();
     let mut saw_dars = false;
     let mut saw_disabled_status = false;
     // Drain a bounded number of events; without DARS we won't get
     // TurnComplete for this op, so cap the loop.
     for _ in 0..6 {
-        let Some(ev) = h.next_event().await else { break };
-        if matches!(ev, Event::DarsResult { .. }) { saw_dars = true; }
+        let Some(ev) = h.next_event().await else {
+            break;
+        };
+        if matches!(ev, Event::DarsResult { .. }) {
+            saw_dars = true;
+        }
         if let Event::Status { message, .. } = ev {
             if message.contains("dars disabled") {
                 saw_disabled_status = true;

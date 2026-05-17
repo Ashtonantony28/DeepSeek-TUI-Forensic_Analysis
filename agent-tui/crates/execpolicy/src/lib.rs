@@ -69,13 +69,19 @@ mod tests {
 
     #[test]
     fn yolo_bypasses_approval() {
-        let c = PolicyContext { mode: AppMode::Agent, yolo: true };
+        let c = PolicyContext {
+            mode: AppMode::Agent,
+            yolo: true,
+        };
         assert_eq!(c.pre_decide(true), ApprovalRequirement::Skip);
     }
 
     #[test]
     fn agent_mode_requests_approval_for_destructive() {
-        let c = PolicyContext { mode: AppMode::Agent, yolo: false };
+        let c = PolicyContext {
+            mode: AppMode::Agent,
+            yolo: false,
+        };
         assert_eq!(c.pre_decide(true), ApprovalRequirement::NeedsApproval);
         assert_eq!(c.pre_decide(false), ApprovalRequirement::Skip);
     }

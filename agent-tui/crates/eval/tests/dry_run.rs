@@ -29,13 +29,13 @@ async fn dry_run_scale_1_produces_valid_json() {
     };
     // Two instances × 1 rollout each.
     let mock = MockClient::new();
-    mock.push_text(
-        "Fix:\n```diff\ndiff --git a/f b/f\n--- a/f\n+++ b/f\n@@ -1 +1 @@\n-x\n+y\n```",
-    );
+    mock.push_text("Fix:\n```diff\ndiff --git a/f b/f\n--- a/f\n+++ b/f\n@@ -1 +1 @@\n-x\n+y\n```");
     mock.push_text("No fix.");
     let llm: Arc<dyn LlmClient> = Arc::new(mock);
 
-    let run = run_eval(config, llm).await.expect("run_eval should succeed");
+    let run = run_eval(config, llm)
+        .await
+        .expect("run_eval should succeed");
 
     // Shape checks.
     assert_eq!(run.instances.len(), 2, "should have 2 instance results");
@@ -45,12 +45,24 @@ async fn dry_run_scale_1_produces_valid_json() {
     // pass_at_1 is scripted by instance_id suffix in dry-run.
     let pass_inst = &run.instances[0];
     let fail_inst = &run.instances[1];
-    assert!(pass_inst.pass_at_1, "pass instance should have pass_at_1=true");
-    assert!(!fail_inst.pass_at_1, "fail instance should have pass_at_1=false");
+    assert!(
+        pass_inst.pass_at_1,
+        "pass instance should have pass_at_1=true"
+    );
+    assert!(
+        !fail_inst.pass_at_1,
+        "fail instance should have pass_at_1=false"
+    );
 
     // Semantic pass must be Some for both.
-    assert!(pass_inst.semantic_pass.is_some(), "semantic_pass must be Some");
-    assert!(fail_inst.semantic_pass.is_some(), "semantic_pass must be Some");
+    assert!(
+        pass_inst.semantic_pass.is_some(),
+        "semantic_pass must be Some"
+    );
+    assert!(
+        fail_inst.semantic_pass.is_some(),
+        "semantic_pass must be Some"
+    );
 
     // Summary aggregates must be in [0, 1].
     assert!(run.summary.pass_at_1 >= 0.0 && run.summary.pass_at_1 <= 1.0);
@@ -90,7 +102,9 @@ async fn dry_run_scale_4_exercises_rtv() {
     }
     let llm: Arc<dyn LlmClient> = Arc::new(mock);
 
-    let run = run_eval(config, llm).await.expect("run_eval with scale=4 should succeed");
+    let run = run_eval(config, llm)
+        .await
+        .expect("run_eval with scale=4 should succeed");
 
     assert_eq!(run.instances.len(), 2);
     assert_eq!(run.config.scale, 4);
@@ -124,7 +138,10 @@ async fn compare_two_dry_runs_produces_markdown_table() {
         );
     }
     let run_a = run_eval(
-        RunConfig { model: "model-a".into(), ..base_config },
+        RunConfig {
+            model: "model-a".into(),
+            ..base_config
+        },
         Arc::new(mock_a),
     )
     .await
@@ -137,7 +154,9 @@ async fn compare_two_dry_runs_produces_markdown_table() {
             "Fix:\n```diff\ndiff --git a/f b/f\n--- a/f\n+++ b/f\n@@ -1 +1 @@\n-x\n+y\n```",
         );
     }
-    for _ in 0..6 { mock_b.push_text("1"); }
+    for _ in 0..6 {
+        mock_b.push_text("1");
+    }
     let run_b = run_eval(
         RunConfig {
             model: "model-b".into(),
@@ -157,10 +176,19 @@ async fn compare_two_dry_runs_produces_markdown_table() {
     let md = compare_runs(&run_a, &run_b);
 
     // Structure validation.
-    assert!(md.contains("## Comparison"), "should have comparison header");
+    assert!(
+        md.contains("## Comparison"),
+        "should have comparison header"
+    );
     assert!(md.contains("pass@1"), "should contain pass@1 metric");
-    assert!(md.contains("semantic_pass@1"), "should contain semantic metric");
-    assert!(md.contains("Per-instance flips"), "should have flip section");
+    assert!(
+        md.contains("semantic_pass@1"),
+        "should contain semantic metric"
+    );
+    assert!(
+        md.contains("Per-instance flips"),
+        "should have flip section"
+    );
     assert!(md.contains("model-a"), "should reference run A model");
     assert!(md.contains("model-b"), "should reference run B model");
 

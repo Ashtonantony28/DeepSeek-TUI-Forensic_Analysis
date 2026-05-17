@@ -9,17 +9,17 @@ pub fn estimate_tokens(messages: &[Message]) -> u32 {
         for c in &m.content {
             match c {
                 ContentBlock::Text { text } | ContentBlock::Thinking { text } => {
-                    total = total.saturating_add(((text.len() as u32) + 3) / 4);
+                    total = total.saturating_add((text.len() as u32).div_ceil(4));
                 }
                 ContentBlock::ToolUse { input, .. } => {
                     let s = serde_json::to_string(input).unwrap_or_default();
-                    total = total.saturating_add(((s.len() as u32) + 3) / 4);
+                    total = total.saturating_add((s.len() as u32).div_ceil(4));
                 }
                 ContentBlock::ToolResult { content, .. } => {
-                    total = total.saturating_add(((content.len() as u32) + 3) / 4);
+                    total = total.saturating_add((content.len() as u32).div_ceil(4));
                 }
                 ContentBlock::Image { data, .. } => {
-                    total = total.saturating_add(((data.len() as u32) + 3) / 4);
+                    total = total.saturating_add((data.len() as u32).div_ceil(4));
                 }
             }
         }

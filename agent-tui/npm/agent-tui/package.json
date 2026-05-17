@@ -1,0 +1,29 @@
+{
+  "name": "agent-tui",
+  "version": "0.1.0",
+  "description": "Multi-provider terminal coding agent — npm wrapper that downloads the prebuilt binary",
+  "keywords": ["ai", "agent", "tui", "coding", "cli", "anthropic", "openai"],
+  "homepage": "https://github.com/ashtonantony28/deepseek-tui-enhanced",
+  "bugs": {
+    "url": "https://github.com/ashtonantony28/deepseek-tui-enhanced/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ashtonantony28/deepseek-tui-enhanced.git"
+  },
+  "license": "MIT",
+  "bin": {
+    "agent-tui": "./bin/agent-tui"
+  },
+  "scripts": {
+    "postinstall": "node scripts/postinstall.js"
+  },
+  "files": [
+    "bin/",
+    "scripts/",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=16"
+  }
+}

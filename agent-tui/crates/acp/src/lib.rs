@@ -101,7 +101,9 @@ impl AcpServer {
         let mut reader = BufReader::new(stdin).lines();
         let me = Arc::new(self);
         while let Some(line) = reader.next_line().await? {
-            if line.trim().is_empty() { continue; }
+            if line.trim().is_empty() {
+                continue;
+            }
             let req: JsonRpcReq = match serde_json::from_str(&line) {
                 Ok(r) => r,
                 Err(e) => {
@@ -109,7 +111,10 @@ impl AcpServer {
                         jsonrpc: "2.0",
                         id: Value::Null,
                         result: None,
-                        error: Some(JsonRpcError { code: -32700, message: e.to_string() }),
+                        error: Some(JsonRpcError {
+                            code: -32700,
+                            message: e.to_string(),
+                        }),
                     };
                     write_line(&mut stdout, &resp).await?;
                     continue;
@@ -133,7 +138,10 @@ impl AcpServer {
                         jsonrpc: "2.0",
                         id,
                         result: None,
-                        error: Some(JsonRpcError { code: -32603, message: e.to_string() }),
+                        error: Some(JsonRpcError {
+                            code: -32603,
+                            message: e.to_string(),
+                        }),
                     };
                     write_line(&mut stdout, &resp).await?;
                 }
@@ -190,15 +198,24 @@ impl AcpServer {
                     mode: AppMode::Yolo,
                     model: None,
                     provider: None,
-                }).await.map_err(|e| AcpError::Rpc(e.to_string()))?;
+                })
+                .await
+                .map_err(|e| AcpError::Rpc(e.to_string()))?;
                 // Drain events into a single response payload.
                 let mut text = String::new();
                 let mut tool_calls: Vec<Value> = Vec::new();
                 for _ in 0..256 {
-                    let Some(ev) = h.next_event().await else { break };
+                    let Some(ev) = h.next_event().await else {
+                        break;
+                    };
                     match ev {
                         Event::Delta { delta, .. } => text.push_str(&delta),
-                        Event::ToolCallStarted { tool_call_id, name, input, .. } => {
+                        Event::ToolCallStarted {
+                            tool_call_id,
+                            name,
+                            input,
+                            ..
+                        } => {
                             tool_calls.push(json!({
                                 "id": tool_call_id.0,
                                 "name": name,
@@ -216,16 +233,25 @@ impl AcpServer {
                 }))
             }
             "fs/read_text_file" => {
-                let path = req.params.get("path").and_then(Value::as_str)
+                let path = req
+                    .params
+                    .get("path")
+                    .and_then(Value::as_str)
                     .ok_or_else(|| AcpError::Rpc("missing path".into()))?;
                 let abs = self.resolve(path)?;
                 let body = std::fs::read_to_string(abs.as_std_path())?;
                 Ok(json!({ "content": body }))
             }
             "fs/write_text_file" => {
-                let path = req.params.get("path").and_then(Value::as_str)
+                let path = req
+                    .params
+                    .get("path")
+                    .and_then(Value::as_str)
                     .ok_or_else(|| AcpError::Rpc("missing path".into()))?;
-                let content = req.params.get("content").and_then(Value::as_str)
+                let content = req
+                    .params
+                    .get("content")
+                    .and_then(Value::as_str)
                     .ok_or_else(|| AcpError::Rpc("missing content".into()))?;
                 let abs = self.resolve(path)?;
                 if let Some(parent) = abs.parent() {
@@ -291,7 +317,10 @@ pub async fn handle_one(server: &AcpServer, body: &str) -> Result<String, AcpErr
             jsonrpc: "2.0",
             id,
             result: None,
-            error: Some(JsonRpcError { code: -32603, message: e.to_string() }),
+            error: Some(JsonRpcError {
+                code: -32603,
+                message: e.to_string(),
+            }),
         })?),
     }
 }
@@ -304,11 +333,17 @@ mod tests {
     #[tokio::test]
     async fn initialize_advertises_caps() {
         let llm = Arc::new(MockClient::new());
-        let s = AcpServer::new(llm as Arc<dyn LlmClient>, Utf8PathBuf::from("."), "mock-model".into());
+        let s = AcpServer::new(
+            llm as Arc<dyn LlmClient>,
+            Utf8PathBuf::from("."),
+            "mock-model".into(),
+        );
         let out = handle_one(
             &s,
             r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#,
-        ).await.unwrap();
+        )
+        .await
+        .unwrap();
         assert!(out.contains("loadSession"));
         assert!(out.contains("agent-tui"));
     }
@@ -316,24 +351,39 @@ mod tests {
     #[tokio::test]
     async fn new_session_returns_id() {
         let llm = Arc::new(MockClient::new());
-        let s = AcpServer::new(llm as Arc<dyn LlmClient>, Utf8PathBuf::from("."), "mock-model".into());
+        let s = AcpServer::new(
+            llm as Arc<dyn LlmClient>,
+            Utf8PathBuf::from("."),
+            "mock-model".into(),
+        );
         let out = handle_one(
             &s,
             r#"{"jsonrpc":"2.0","id":2,"method":"session/new","params":{}}"#,
-        ).await.unwrap();
+        )
+        .await
+        .unwrap();
         let v: Value = serde_json::from_str(&out).unwrap();
-        assert!(v["result"]["sessionId"].as_str().unwrap().starts_with("sess-"));
+        assert!(v["result"]["sessionId"]
+            .as_str()
+            .unwrap()
+            .starts_with("sess-"));
     }
 
     #[tokio::test]
     async fn prompt_returns_streamed_text() {
         let llm = Arc::new(MockClient::new());
         llm.push_text("hi from acp");
-        let s = AcpServer::new(llm.clone() as Arc<dyn LlmClient>, Utf8PathBuf::from("."), "mock-model".into());
+        let s = AcpServer::new(
+            llm.clone() as Arc<dyn LlmClient>,
+            Utf8PathBuf::from("."),
+            "mock-model".into(),
+        );
         let new = handle_one(
             &s,
             r#"{"jsonrpc":"2.0","id":3,"method":"session/new","params":{}}"#,
-        ).await.unwrap();
+        )
+        .await
+        .unwrap();
         let nv: Value = serde_json::from_str(&new).unwrap();
         let sid = nv["result"]["sessionId"].as_str().unwrap().to_string();
         let req = format!(
@@ -356,7 +406,9 @@ mod tests {
         let r = handle_one(
             &s,
             r#"{"jsonrpc":"2.0","id":2,"method":"fs/read_text_file","params":{"path":"a.txt"}}"#,
-        ).await.unwrap();
+        )
+        .await
+        .unwrap();
         assert!(r.contains("\"content\":\"hi\""));
     }
 }

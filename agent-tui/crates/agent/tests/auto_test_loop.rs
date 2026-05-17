@@ -5,7 +5,7 @@
 //! detection helpers directly and rely on the unit tests in
 //! `auto_test.rs` for behaviour.
 
-use agent_tui_agent::auto_test::{TestRunner, detect_runner};
+use agent_tui_agent::auto_test::{detect_runner, TestRunner};
 use camino::Utf8PathBuf;
 
 fn temp_root() -> (tempfile::TempDir, Utf8PathBuf) {

@@ -16,10 +16,16 @@ pub struct ToolResult {
 
 impl ToolResult {
     pub fn ok(content: impl Into<String>) -> Self {
-        Self { content: content.into(), is_error: false }
+        Self {
+            content: content.into(),
+            is_error: false,
+        }
     }
     pub fn err(content: impl Into<String>) -> Self {
-        Self { content: content.into(), is_error: true }
+        Self {
+            content: content.into(),
+            is_error: true,
+        }
     }
 }
 
@@ -49,7 +55,9 @@ pub trait Tool: Send + Sync {
     fn schema(&self) -> ToolSchema;
     fn requires_approval(&self) -> bool;
     fn is_read_only(&self) -> bool;
-    fn is_plan_tool(&self) -> bool { false }
+    fn is_plan_tool(&self) -> bool {
+        false
+    }
     async fn execute(
         &self,
         args: serde_json::Value,

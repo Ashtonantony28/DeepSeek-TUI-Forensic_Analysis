@@ -129,7 +129,13 @@ fn language_for_path(path: &Utf8Path) -> Option<LangSpec> {
         "rs" => Some((
             tree_sitter_rust::language(),
             "rust",
-            &["function_item", "impl_item", "struct_item", "enum_item", "trait_item"],
+            &[
+                "function_item",
+                "impl_item",
+                "struct_item",
+                "enum_item",
+                "trait_item",
+            ],
         )),
         "py" => Some((
             tree_sitter_python::language(),
@@ -168,12 +174,20 @@ fn language_for_path(path: &Utf8Path) -> Option<LangSpec> {
         "go" => Some((
             tree_sitter_go::language(),
             "go",
-            &["function_declaration", "method_declaration", "type_declaration"],
+            &[
+                "function_declaration",
+                "method_declaration",
+                "type_declaration",
+            ],
         )),
         "java" => Some((
             tree_sitter_java::language(),
             "java",
-            &["class_declaration", "method_declaration", "interface_declaration"],
+            &[
+                "class_declaration",
+                "method_declaration",
+                "interface_declaration",
+            ],
         )),
         _ => None,
     }

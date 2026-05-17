@@ -8,9 +8,7 @@
 
 use agent_tui_agent::{Engine, Session};
 use agent_tui_llm::{LlmClient, MockClient};
-use agent_tui_protocol::{
-    AppMode, ContentBlock, Event, Message, Op, Provider, Role,
-};
+use agent_tui_protocol::{AppMode, ContentBlock, Event, Message, Op, Provider, Role};
 use agent_tui_tools::ToolRegistry;
 use camino::Utf8PathBuf;
 use std::sync::Arc;
@@ -18,7 +16,9 @@ use std::sync::Arc;
 fn long_msg(role: Role, chars: usize) -> Message {
     Message {
         role,
-        content: vec![ContentBlock::Text { text: "x".repeat(chars) }],
+        content: vec![ContentBlock::Text {
+            text: "x".repeat(chars),
+        }],
         metadata: Default::default(),
     }
 }
@@ -35,7 +35,11 @@ async fn seam_uses_flash_summary_when_enabled() {
     // Pack ~50 messages of ~20k chars each → comfortably over L1 (192k tokens
     // is ~768k chars at 4 chars/token).
     for i in 0..50 {
-        let role = if i % 2 == 0 { Role::User } else { Role::Assistant };
+        let role = if i % 2 == 0 {
+            Role::User
+        } else {
+            Role::Assistant
+        };
         session.messages.push(long_msg(role, 20_000));
     }
 
@@ -60,7 +64,9 @@ async fn seam_uses_flash_summary_when_enabled() {
 
     let mut saw_seam = false;
     for _ in 0..256 {
-        let Some(ev) = h.next_event().await else { break };
+        let Some(ev) = h.next_event().await else {
+            break;
+        };
         if let Event::SeamApplied { .. } = ev {
             saw_seam = true;
         }
@@ -81,7 +87,11 @@ async fn seam_falls_back_to_placeholder_when_disabled() {
 
     let mut session = Session::new("mock-model");
     for i in 0..50 {
-        let role = if i % 2 == 0 { Role::User } else { Role::Assistant };
+        let role = if i % 2 == 0 {
+            Role::User
+        } else {
+            Role::Assistant
+        };
         session.messages.push(long_msg(role, 20_000));
     }
     let (reg, ctx) = ToolRegistry::with_builtins(Utf8PathBuf::from("/tmp"));
@@ -104,7 +114,9 @@ async fn seam_falls_back_to_placeholder_when_disabled() {
 
     let mut saw_seam = false;
     for _ in 0..256 {
-        let Some(ev) = h.next_event().await else { break };
+        let Some(ev) = h.next_event().await else {
+            break;
+        };
         if let Event::SeamApplied { .. } = ev {
             saw_seam = true;
         }

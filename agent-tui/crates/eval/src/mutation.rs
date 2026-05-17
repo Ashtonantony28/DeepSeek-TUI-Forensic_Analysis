@@ -108,11 +108,11 @@ fn collect_mutation_points(root: Node<'_>, source: &[u8], pts: &mut Vec<Mutation
                         let replacement = match op {
                             "==" => Some("!="),
                             "!=" => Some("=="),
-                            "<"  => Some("<="),
-                            ">"  => Some(">="),
+                            "<" => Some("<="),
+                            ">" => Some(">="),
                             "<=" => Some("<"),
                             ">=" => Some(">"),
-                            _    => None,
+                            _ => None,
                         };
                         if let Some(rep) = replacement {
                             pts.push(MutationPoint {
@@ -272,7 +272,9 @@ def test_flag():
     fn comparison_swap_produces_opposite_operator() {
         let source = "def t():\n    assert x == y\n";
         let mutants = generate_mutants(source, 5);
-        let swap = mutants.iter().find(|m| m.operator == MutationOperator::ComparisonSwap);
+        let swap = mutants
+            .iter()
+            .find(|m| m.operator == MutationOperator::ComparisonSwap);
         assert!(swap.is_some(), "expected a ComparisonSwap mutant");
         assert!(swap.unwrap().source.contains("!="), "== should become !=");
     }
@@ -281,16 +283,23 @@ def test_flag():
     fn return_flip_swaps_bool() {
         let source = "def t():\n    assert result == True\n";
         let mutants = generate_mutants(source, 5);
-        let flip = mutants.iter().find(|m| m.operator == MutationOperator::ReturnFlip);
+        let flip = mutants
+            .iter()
+            .find(|m| m.operator == MutationOperator::ReturnFlip);
         assert!(flip.is_some(), "expected a ReturnFlip mutant");
-        assert!(flip.unwrap().source.contains("False"), "True should become False");
+        assert!(
+            flip.unwrap().source.contains("False"),
+            "True should become False"
+        );
     }
 
     #[test]
     fn off_by_one_increments_integer() {
         let source = "def t():\n    assert len(x) >= 1\n";
         let mutants = generate_mutants(source, 5);
-        let obo = mutants.iter().find(|m| m.operator == MutationOperator::OffByOne);
+        let obo = mutants
+            .iter()
+            .find(|m| m.operator == MutationOperator::OffByOne);
         assert!(obo.is_some(), "expected an OffByOne mutant");
         assert!(obo.unwrap().source.contains("2"), "1 should become 2");
     }

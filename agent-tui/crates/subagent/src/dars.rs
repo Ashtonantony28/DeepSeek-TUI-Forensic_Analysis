@@ -122,8 +122,9 @@ pub async fn run_dars(
     // Phase 2: verify.
     let verifier_prompt = build_verifier_prompt(prompt, &candidates);
     let verifier_count = cfg.verifier_count.max(1);
-    let verifier_prompts: Vec<String> =
-        (0..verifier_count).map(|_| verifier_prompt.clone()).collect();
+    let verifier_prompts: Vec<String> = (0..verifier_count)
+        .map(|_| verifier_prompt.clone())
+        .collect();
     let verifier_results = mgr
         .parallel_fan_out(
             cfg.model.clone(),
@@ -171,7 +172,11 @@ fn build_verifier_prompt(original_prompt: &str, candidates: &[DarsCandidate]) ->
     s.push_str(original_prompt);
     s.push_str("\n\nCandidates:\n");
     for c in candidates {
-        s.push_str(&format!("[{i}] {body}\n\n", i = c.index, body = c.answer.trim()));
+        s.push_str(&format!(
+            "[{i}] {body}\n\n",
+            i = c.index,
+            body = c.answer.trim()
+        ));
     }
     s
 }
@@ -222,7 +227,7 @@ mod tests {
         assert_eq!(parse_vote("best: 0  -- because", 3), Some(0));
         assert_eq!(parse_vote("the answer is best=1.", 4), Some(1));
         assert_eq!(parse_vote("BEST: 99", 3), None); // out of range
-        assert_eq!(parse_vote("0", 3), Some(0));    // fallback
+        assert_eq!(parse_vote("0", 3), Some(0)); // fallback
     }
 
     #[tokio::test]

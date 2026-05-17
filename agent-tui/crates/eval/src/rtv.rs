@@ -33,7 +33,12 @@ pub struct RolloutSummary {
 
 impl RolloutSummary {
     pub fn failed() -> Self {
-        Self { patch: String::new(), pass: false, turns: 0, rationale: "pipeline failed".into() }
+        Self {
+            patch: String::new(),
+            pass: false,
+            turns: 0,
+            rationale: "pipeline failed".into(),
+        }
     }
 }
 
@@ -55,15 +60,17 @@ pub async fn rtv_vote(
 
     // Fast path: if any summary passes, run tournament only on passing ones.
     let passing: Vec<RolloutSummary> = summaries.iter().filter(|s| s.pass).cloned().collect();
-    let mut pool = if passing.is_empty() { summaries } else { passing };
+    let mut pool = if passing.is_empty() {
+        summaries
+    } else {
+        passing
+    };
 
     // Iterative tournament: repeatedly reduce pool by judging groups.
     while pool.len() > 1 {
         let mut next_round: Vec<RolloutSummary> = Vec::new();
-        let chunks: Vec<Vec<RolloutSummary>> = pool
-            .chunks(GROUP_SIZE)
-            .map(|c| c.to_vec())
-            .collect();
+        let chunks: Vec<Vec<RolloutSummary>> =
+            pool.chunks(GROUP_SIZE).map(|c| c.to_vec()).collect();
         for group in chunks {
             let winner = judge_group(&group, judge.clone(), model).await;
             next_round.push(winner);
@@ -71,7 +78,9 @@ pub async fn rtv_vote(
         pool = next_round;
     }
 
-    pool.into_iter().next().unwrap_or_else(RolloutSummary::failed)
+    pool.into_iter()
+        .next()
+        .unwrap_or_else(RolloutSummary::failed)
 }
 
 /// Ask the judge LLM to pick the best summary from a small group.
@@ -99,7 +108,11 @@ async fn judge_group(
     }
 
     let idx = parse_winner_index(&text, group.len());
-    debug!("rtv judge picked index {} from group of {}", idx, group.len());
+    debug!(
+        "rtv judge picked index {} from group of {}",
+        idx,
+        group.len()
+    );
     group[idx].clone()
 }
 
@@ -141,7 +154,12 @@ mod tests {
     use agent_tui_llm::MockClient;
 
     fn summary(pass: bool, turns: u32, patch: &str) -> RolloutSummary {
-        RolloutSummary { patch: patch.into(), pass, turns, rationale: "test".into() }
+        RolloutSummary {
+            patch: patch.into(),
+            pass,
+            turns,
+            rationale: "test".into(),
+        }
     }
 
     #[tokio::test]
