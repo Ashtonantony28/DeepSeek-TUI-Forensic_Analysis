@@ -1,0 +1,4 @@
+target/
+agent-tui/target/
+**/*.rs.bk
+.DS_Store

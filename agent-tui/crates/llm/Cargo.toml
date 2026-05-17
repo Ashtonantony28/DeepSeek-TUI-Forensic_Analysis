@@ -1,0 +1,20 @@
+[package]
+name = "agent-tui-llm"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+agent-tui-protocol.workspace = true
+async-trait.workspace = true
+tokio = { workspace = true, features = ["rt", "macros", "io-util", "time"] }
+serde.workspace = true
+serde_json.workspace = true
+reqwest.workspace = true
+futures.workspace = true
+futures-util.workspace = true
+bytes.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+url.workspace = true
