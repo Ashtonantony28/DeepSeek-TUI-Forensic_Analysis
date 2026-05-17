@@ -331,6 +331,7 @@ async fn cmd_interactive(cfg: &Config, workspace: Utf8PathBuf) -> Result<()> {
         plan_blocks_enabled: cfg.extensions.plan_blocks,
         dars_enabled: cfg.extensions.dars_branching,
         dars_verifier_count: cfg.extensions.verifier_count as usize,
+        compaction_enabled: cfg.extensions.compaction_enabled,
     };
     run_tui(client, workspace, model, cfg.yolo, knobs)
         .await
@@ -413,6 +414,7 @@ async fn serve_http(addr: String, cfg: &Config, workspace: Utf8PathBuf) -> Resul
             engine.plan_blocks_enabled = ext.plan_blocks;
             engine.dars_enabled = ext.dars_branching;
             engine.dars_verifier_count = ext.verifier_count as usize;
+            engine.compaction_enabled = ext.compaction_enabled;
             let h = engine.spawn();
             let _ = h
                 .send(Op::Submit {
@@ -465,4 +467,5 @@ fn apply_extensions(engine: &mut agent_tui_agent::Engine, cfg: &Config) {
     engine.plan_blocks_enabled = ext.plan_blocks;
     engine.dars_enabled = ext.dars_branching;
     engine.dars_verifier_count = ext.verifier_count as usize;
+    engine.compaction_enabled = ext.compaction_enabled;
 }

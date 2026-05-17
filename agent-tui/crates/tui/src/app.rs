@@ -92,6 +92,7 @@ pub struct EngineKnobs {
     pub plan_blocks_enabled: bool,
     pub dars_enabled: bool,
     pub dars_verifier_count: usize,
+    pub compaction_enabled: bool,
 }
 
 impl Default for EngineKnobs {
@@ -104,6 +105,7 @@ impl Default for EngineKnobs {
             plan_blocks_enabled: true,
             dars_enabled: true,
             dars_verifier_count: 3,
+            compaction_enabled: true,
         }
     }
 }
@@ -129,6 +131,7 @@ pub async fn run_tui(
     engine.plan_blocks_enabled = knobs.plan_blocks_enabled;
     engine.dars_enabled = knobs.dars_enabled;
     engine.dars_verifier_count = knobs.dars_verifier_count;
+    engine.compaction_enabled = knobs.compaction_enabled;
     let handle = engine.spawn();
 
     enable_raw_mode()?;

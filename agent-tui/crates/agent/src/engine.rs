@@ -1,6 +1,7 @@
 //! Engine task. Owns a `Session` and drives the turn loop.
 
 use crate::auto_test::{self, MAX_RETRIES, TestRunner};
+use crate::compactor::FlashCompactor;
 use crate::parser::parse_tool_input;
 use crate::session::Session;
 use agent_tui_context::{
@@ -48,6 +49,14 @@ pub struct Engine {
     pub dars_enabled: bool,
     pub dars_branch_count: usize,
     pub dars_verifier_count: usize,
+    /// 3.9 — when true, the engine calls a Flash-tier compactor to produce
+    /// real summaries for the seam and cycle archived blocks. When false,
+    /// it falls back to a static placeholder string (the Phase 2 behaviour).
+    pub compaction_enabled: bool,
+    /// 3.9 — explicit Flash model name for the compactor. Resolved from
+    /// the router's `Small` tier in `Engine::new` so it always matches the
+    /// configured provider.
+    pub compactor_model: String,
 }
 
 #[derive(Clone)]
@@ -73,6 +82,8 @@ impl Engine {
         tool_ctx: Arc<ToolContext>,
     ) -> Self {
         let provider = llm.provider();
+        let compactor_model =
+            crate::routing::Router::new(provider).model_for_tier(crate::routing::Tier::Small).to_string();
         Self {
             session,
             mode: AppMode::Agent,
@@ -93,6 +104,8 @@ impl Engine {
             dars_enabled: true,
             dars_branch_count: 3,
             dars_verifier_count: 3,
+            compaction_enabled: true,
+            compactor_model,
         }
     }
 
@@ -194,14 +207,18 @@ impl Engine {
             }).await;
         }
 
-        // Seam check (non-destructive); summary is a stub for Phase 2.
+        // Seam check (non-destructive). 3.9: when compaction is enabled,
+        // run the Flash compactor over the head to produce a real summary;
+        // otherwise fall back to a static placeholder so seams still
+        // archive deterministically.
         if let Some(outcome) = self.seam.evaluate(&self.session.messages) {
             let level = outcome.level as u8;
             let archived = outcome.head_token_estimate;
+            let summary = self.maybe_summarize_seam(&outcome).await;
             self.seam.apply_summary(
                 &mut self.session.messages,
                 &outcome,
-                "[Phase-2 seam summary placeholder]".into(),
+                summary,
             );
             let _ = event_tx.send(Event::SeamApplied {
                 turn_id: turn_id.clone(),
@@ -427,10 +444,12 @@ impl Engine {
             // Loop back for another LLM call.
         }
 
-        // Cycle (hard) — try at end of turn if needed.
+        // Cycle (hard) — try at end of turn if needed. 3.9: real briefing
+        // produced by the Flash compactor when enabled.
+        let briefing = self.maybe_summarize_cycle().await;
         if let Some(outcome) = self
             .cycle
-            .maybe_cycle(&mut self.session.messages, "[Phase-2 cycle briefing placeholder]".into())
+            .maybe_cycle(&mut self.session.messages, briefing)
         {
             let _ = event_tx.send(Event::CycleAdvanced {
                 from: outcome.from,
@@ -444,6 +463,48 @@ impl Engine {
 }
 
 impl Engine {
+    /// 3.9 — produce a real seam summary by invoking the Flash compactor.
+    /// Falls back to a static placeholder when compaction is disabled or
+    /// the LLM call fails; the seam still applies in that case.
+    async fn maybe_summarize_seam(
+        &self,
+        outcome: &agent_tui_context::SeamOutcome,
+    ) -> String {
+        if !self.compaction_enabled {
+            return "[seam summary disabled]".into();
+        }
+        let head_count = outcome.head_message_count.min(self.session.messages.len());
+        let head = &self.session.messages[..head_count];
+        let c = FlashCompactor::new(self.llm.clone(), &self.compactor_model);
+        match c.summarize_seam(head).await {
+            Ok(s) if !s.is_empty() => s,
+            Ok(_) => "[empty summary]".into(),
+            Err(_) => "[seam summary unavailable]".into(),
+        }
+    }
+
+    /// 3.9 — Cycle briefings get a higher token budget than seams. Called
+    /// unconditionally at end-of-turn; `CycleManager::maybe_cycle` decides
+    /// whether the briefing is actually consumed.
+    async fn maybe_summarize_cycle(&self) -> String {
+        if !self.compaction_enabled {
+            return "[cycle briefing disabled]".into();
+        }
+        // Estimate cheaply whether we're near the cycle threshold; if not,
+        // skip the LLM call entirely. The manager will also short-circuit
+        // but skipping the call saves money in the common case.
+        let tokens = agent_tui_context::estimate_tokens(&self.session.messages);
+        if tokens < self.cycle.config.cycle_tokens {
+            return String::new();
+        }
+        let c = FlashCompactor::new(self.llm.clone(), &self.compactor_model);
+        match c.summarize_cycle(&self.session.messages).await {
+            Ok(s) if !s.is_empty() => s,
+            Ok(_) => "[empty briefing]".into(),
+            Err(_) => "[cycle briefing unavailable]".into(),
+        }
+    }
+
     /// 3.8 — fan a prompt out across `dars_branch_count` parallel
     /// sub-agents, then have `dars_verifier_count` verifier sub-agents
     /// vote on the winner. Streams the winning answer as a normal text

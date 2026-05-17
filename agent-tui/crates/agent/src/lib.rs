@@ -13,11 +13,13 @@
 //! tool catalog for each turn.
 
 pub mod auto_test;
+pub mod compactor;
 pub mod engine;
 pub mod parser;
 pub mod routing;
 pub mod session;
 
+pub use compactor::FlashCompactor;
 pub use engine::{Engine, EngineHandle};
 pub use parser::parse_tool_input;
 pub use routing::{classify as classify_prompt, Router, Tier};

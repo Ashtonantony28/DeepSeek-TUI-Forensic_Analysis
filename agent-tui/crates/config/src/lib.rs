@@ -91,6 +91,11 @@ pub struct Extensions {
     pub pipeline_enabled: bool,
     #[serde(default)]
     pub repl_tools: bool,
+    /// 3.9 — Flash-tier summarization for seam/cycle archived blocks.
+    /// Default-on; turn off to ship `[seam summary disabled]` strings
+    /// (useful when running fully offline against a mock client).
+    #[serde(default = "Extensions::default_true")]
+    pub compaction_enabled: bool,
 }
 
 impl Default for Extensions {
@@ -107,6 +112,7 @@ impl Default for Extensions {
             verifier_count: 3,
             pipeline_enabled: false,
             repl_tools: false,
+            compaction_enabled: true,
         }
     }
 }
