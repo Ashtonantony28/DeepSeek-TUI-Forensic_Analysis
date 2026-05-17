@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 agent-tui-protocol.workspace = true
 agent-tui-execpolicy.workspace = true
+agent-tui-retrieval.workspace = true
 async-trait.workspace = true
 tokio = { workspace = true }
 serde.workspace = true

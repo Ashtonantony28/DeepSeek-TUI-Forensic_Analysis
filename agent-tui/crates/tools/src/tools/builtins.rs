@@ -511,6 +511,130 @@ impl Tool for GitLogTool {
     }
 }
 
+// ---------- checkpoint tools (extension 3.1) ----------
+
+pub struct ListCheckpointsTool;
+#[async_trait]
+impl Tool for ListCheckpointsTool {
+    fn name(&self) -> &str { "list_checkpoints" }
+    fn schema(&self) -> ToolSchema {
+        ToolSchema::new(
+            self.name(),
+            "List workspace checkpoints (id, turn, timestamp, summary).",
+            json!({"type":"object","properties":{}}),
+        )
+    }
+    fn requires_approval(&self) -> bool { false }
+    fn is_read_only(&self) -> bool { true }
+    async fn execute(&self, _: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
+        if !ctx.checkpoints.enabled() {
+            return Ok(ToolResult::ok("checkpoint store disabled (not a git repo)"));
+        }
+        let list = ctx.checkpoints.list();
+        if list.is_empty() {
+            return Ok(ToolResult::ok("no checkpoints"));
+        }
+        let mut body = String::new();
+        for c in list {
+            body.push_str(&format!(
+                "{}  turn={}  ts={}  {}\n",
+                c.id, c.turn, c.timestamp, c.summary
+            ));
+        }
+        Ok(ToolResult::ok(body))
+    }
+}
+
+pub struct CheckpointDiffTool;
+#[async_trait]
+impl Tool for CheckpointDiffTool {
+    fn name(&self) -> &str { "checkpoint_diff" }
+    fn schema(&self) -> ToolSchema {
+        ToolSchema::new(
+            self.name(),
+            "Show the diff between a checkpoint and the current workspace.",
+            json!({"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}),
+        )
+    }
+    fn requires_approval(&self) -> bool { false }
+    fn is_read_only(&self) -> bool { true }
+    async fn execute(&self, args: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
+        let id = require_str(&args, "id")?;
+        match ctx.checkpoints.diff(id) {
+            Ok(d) if d.is_empty() => Ok(ToolResult::ok("(no changes)")),
+            Ok(d) => Ok(ToolResult::ok(d)),
+            Err(e) => Err(ToolError::Other(e.to_string())),
+        }
+    }
+}
+
+pub struct RollbackTool;
+#[async_trait]
+impl Tool for RollbackTool {
+    fn name(&self) -> &str { "rollback" }
+    fn schema(&self) -> ToolSchema {
+        ToolSchema::new(
+            self.name(),
+            "Restore the workspace to a named checkpoint. Destructive: requires approval.",
+            json!({"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}),
+        )
+    }
+    fn requires_approval(&self) -> bool { true }
+    fn is_read_only(&self) -> bool { false }
+    async fn execute(&self, args: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
+        let id = require_str(&args, "id")?;
+        ctx.checkpoints
+            .rollback(id)
+            .map_err(|e| ToolError::Other(e.to_string()))?;
+        Ok(ToolResult::ok(format!("rolled back to {id}")))
+    }
+}
+
+// ---------- semantic_search (extension 3.4) ----------
+
+pub struct SemanticSearchTool;
+#[async_trait]
+impl Tool for SemanticSearchTool {
+    fn name(&self) -> &str { "semantic_search" }
+    fn schema(&self) -> ToolSchema {
+        ToolSchema::new(
+            self.name(),
+            "Semantic + structural search across the workspace. Combines an \
+             AST chunker, a repo-graph PageRank, and embeddings (when \
+             available). Returns ranked file:line snippets.",
+            json!({"type":"object","properties":{
+                "query":{"type":"string"},
+                "top_k":{"type":"integer","default":8}
+            },"required":["query"]}),
+        )
+    }
+    fn requires_approval(&self) -> bool { false }
+    fn is_read_only(&self) -> bool { true }
+    async fn execute(&self, args: Value, ctx: &ToolContext) -> Result<ToolResult, ToolError> {
+        let query = require_str(&args, "query")?.to_string();
+        let top_k = args.get("top_k").and_then(Value::as_u64).unwrap_or(8) as usize;
+        let retriever = ctx.retriever.as_ref().ok_or(ToolError::NotAvailable)?;
+        let hits = retriever
+            .search(&query, top_k)
+            .await
+            .map_err(|e| ToolError::ExecutionFailed(e.to_string()))?;
+        if hits.is_empty() {
+            return Ok(ToolResult::ok("(no matches)"));
+        }
+        let mut body = String::new();
+        for h in hits {
+            body.push_str(&format!(
+                "{}:{}  score={:.3}\n  {}\n",
+                h.path,
+                h.line,
+                h.score,
+                h.snippet.lines().next().unwrap_or("").trim()
+            ));
+        }
+        Ok(ToolResult::ok(body))
+    }
+}
+
 // ---------- update_plan (Plan-mode planning tool) ----------
 
 pub struct UpdatePlanTool;

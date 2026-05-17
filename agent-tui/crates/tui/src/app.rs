@@ -85,6 +85,7 @@ pub async fn run_tui(
     let session_id = session.id.0.clone();
     let (reg, mut ctx) = ToolRegistry::with_builtins(workspace_root.clone());
     ctx.yolo = yolo;
+    ToolRegistry::enable_hybrid_retrieval(&mut ctx).await;
     let provider = llm.provider();
     let engine = Engine::new(session, llm.clone(), Arc::new(reg), Arc::new(ctx));
     let handle = engine.spawn();

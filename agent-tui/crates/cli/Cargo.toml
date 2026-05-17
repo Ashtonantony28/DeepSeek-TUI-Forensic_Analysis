@@ -19,6 +19,7 @@ agent-tui-tui.workspace = true
 agent-tui-acp.workspace = true
 agent-tui-mcp.workspace = true
 agent-tui-pipeline.workspace = true
+agent-tui-retrieval.workspace = true
 tokio = { workspace = true }
 clap.workspace = true
 serde.workspace = true

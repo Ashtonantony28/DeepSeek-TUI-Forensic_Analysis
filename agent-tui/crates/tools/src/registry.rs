@@ -1,3 +1,4 @@
+use crate::checkpoint::CheckpointStore;
 use crate::tools::Tool;
 use agent_tui_execpolicy::{ApprovalGate, EgressPolicy};
 use agent_tui_protocol::AppMode;
@@ -12,16 +13,22 @@ pub struct ToolContext {
     pub yolo: bool,
     pub egress: Arc<EgressPolicy>,
     pub approvals: Arc<ApprovalGate>,
+    pub checkpoints: Arc<CheckpointStore>,
+    /// Optional retriever used by `semantic_search` (wired in 3.4).
+    pub retriever: Option<Arc<dyn agent_tui_retrieval::Retriever>>,
 }
 
 impl ToolContext {
     pub fn new(workspace_root: Utf8PathBuf) -> Self {
+        let checkpoints = Arc::new(CheckpointStore::open(&workspace_root));
         Self {
             workspace_root,
             mode: AppMode::Agent,
             yolo: false,
             egress: Arc::new(EgressPolicy::default()),
             approvals: Arc::new(ApprovalGate::new()),
+            checkpoints,
+            retriever: None,
         }
     }
 }
@@ -55,6 +62,19 @@ impl ToolRegistry {
             .collect()
     }
 
+    /// Build a context with the `HybridRetriever` prepared (graph built,
+    /// Ollama probed, embeddings loaded if present). Async because the probe
+    /// hits the network. Synchronous callers can fall back to `with_builtins`
+    /// without retriever.
+    pub async fn enable_hybrid_retrieval(ctx: &mut ToolContext) {
+        let retriever = agent_tui_retrieval::HybridRetriever::new(
+            ctx.workspace_root.clone(),
+        )
+        .prepare()
+        .await;
+        ctx.retriever = Some(Arc::new(retriever));
+    }
+
     pub fn with_builtins(workspace_root: Utf8PathBuf) -> (Self, ToolContext) {
         use crate::tools::builtins::*;
         let mut reg = Self::new();
@@ -71,6 +91,10 @@ impl ToolRegistry {
         reg.register(Arc::new(GitCommitTool));
         reg.register(Arc::new(GitLogTool));
         reg.register(Arc::new(UpdatePlanTool));
+        reg.register(Arc::new(ListCheckpointsTool));
+        reg.register(Arc::new(CheckpointDiffTool));
+        reg.register(Arc::new(RollbackTool));
+        reg.register(Arc::new(SemanticSearchTool));
         let ctx = ToolContext::new(workspace_root);
         (reg, ctx)
     }

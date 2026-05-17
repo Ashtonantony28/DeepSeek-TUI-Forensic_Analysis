@@ -1,5 +1,6 @@
 //! Engine task. Owns a `Session` and drives the turn loop.
 
+use crate::auto_test::{self, MAX_RETRIES, TestRunner};
 use crate::parser::parse_tool_input;
 use crate::session::Session;
 use agent_tui_context::{
@@ -29,6 +30,8 @@ pub struct Engine {
     pub cycle: CycleManager,
     pub capacity: CapacityController,
     pub model_context_window: u32,
+    pub checkpoint_enabled: bool,
+    pub auto_test_enabled: bool,
 }
 
 #[derive(Clone)]
@@ -64,6 +67,8 @@ impl Engine {
             cycle: CycleManager::default(),
             capacity: CapacityController::default(),
             model_context_window: 200_000,
+            checkpoint_enabled: true,
+            auto_test_enabled: true,
         }
     }
 
@@ -268,6 +273,7 @@ impl Engine {
 
             // Execute tool calls. Read-only -> in parallel; destructive -> serial.
             let mut tool_results: Vec<ContentBlock> = Vec::new();
+            let mut any_destructive_success = false;
             for id in &tool_call_order {
                 let (name, buf) = match tool_calls.get(id) {
                     Some(p) => p.clone(),
@@ -288,6 +294,7 @@ impl Engine {
                     name: name.clone(),
                     input: input.clone(),
                 }).await;
+                let is_destructive = !tool.is_read_only();
                 let result = tool.execute(input, &self.tool_ctx).await;
                 let (output_str, is_error) = match result {
                     Ok(r) => (r.content, r.is_error),
@@ -305,12 +312,28 @@ impl Engine {
                     content: output_str,
                     is_error,
                 });
+
+                // 3.1 — post-tool checkpoint for successful destructive calls.
+                if is_destructive && !is_error && self.checkpoint_enabled {
+                    any_destructive_success = true;
+                    let _ = self
+                        .tool_ctx
+                        .checkpoints
+                        .create(turn_seq(&turn_id), &name);
+                }
             }
             self.session.messages.push(Message {
                 role: Role::User,
                 content: tool_results,
                 metadata: Default::default(),
             });
+
+            // 3.3 — auto-test loop after destructive tool batches.
+            if any_destructive_success && self.auto_test_enabled {
+                if let Some(runner) = auto_test::detect_runner(&self.tool_ctx.workspace_root) {
+                    self.run_auto_test_round(runner, &turn_id, event_tx).await;
+                }
+            }
             // Loop back for another LLM call.
         }
 
@@ -328,6 +351,77 @@ impl Engine {
         let _ = event_tx.send(Event::TurnComplete { turn_id }).await;
         Ok(())
     }
+}
+
+impl Engine {
+    async fn run_auto_test_round(
+        &mut self,
+        runner: TestRunner,
+        turn_id: &TurnId,
+        event_tx: &mpsc::Sender<Event>,
+    ) {
+        // Bounded retries are tracked via session metadata so the budget
+        // resets on a new turn but persists across the per-round loop.
+        let attempts_key = "auto_test_attempts";
+        let mut attempts: u32 = self
+            .session
+            .messages
+            .last()
+            .and_then(|m| m.metadata.get(attempts_key))
+            .and_then(|v| v.as_u64())
+            .map(|n| n as u32)
+            .unwrap_or(0);
+
+        let outcome = auto_test::run_tests(&self.tool_ctx.workspace_root, runner).await;
+        let _ = event_tx
+            .send(Event::Status {
+                turn_id: Some(turn_id.clone()),
+                message: format!(
+                    "auto-test ({}): {}{}",
+                    outcome.runner.label(),
+                    if outcome.passed { "pass" } else { "fail" },
+                    if outcome.timed_out { " (timeout)" } else { "" },
+                ),
+            })
+            .await;
+
+        if outcome.passed {
+            return;
+        }
+
+        attempts += 1;
+        if attempts > MAX_RETRIES {
+            let _ = event_tx
+                .send(Event::Status {
+                    turn_id: Some(turn_id.clone()),
+                    message: format!(
+                        "auto-test still failing after {MAX_RETRIES} attempts; surfacing to user"
+                    ),
+                })
+                .await;
+            return;
+        }
+
+        let body = auto_test::failure_message(&outcome, attempts);
+        let mut msg = Message::user_text(body);
+        msg.metadata.insert(
+            attempts_key.into(),
+            serde_json::Value::from(attempts as u64),
+        );
+        self.session.messages.push(msg);
+    }
+}
+
+fn turn_seq(turn_id: &TurnId) -> u32 {
+    // The TurnId is a UUID string; use a stable hash modulo u32 as the
+    // checkpoint's "turn" label. It is only used for display.
+    let s = &turn_id.0;
+    let mut h: u32 = 2166136261;
+    for b in s.as_bytes() {
+        h ^= *b as u32;
+        h = h.wrapping_mul(16777619);
+    }
+    h
 }
 
 fn decision_to_exec(d: agent_tui_protocol::Decision) -> agent_tui_execpolicy::Decision {

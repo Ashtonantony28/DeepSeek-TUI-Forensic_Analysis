@@ -1,8 +1,22 @@
 //! Retrieval abstractions.
 //!
-//! Phase 2 ships only `RipgrepRetriever`. Phase 3.4 adds the cAST
-//! tree-sitter chunker, an Aider-style PageRank repo-map, and a
-//! sqlite-vec embedding retriever — all behind the same `Retriever` trait.
+//! Phase 2 shipped `RipgrepRetriever`. Phase 3.4 adds three additional
+//! signals — an AST chunker (`chunker`), a PageRank repo-graph (`graph`),
+//! and Ollama-backed embeddings (`embeddings`) — fused with reciprocal-rank
+//! fusion in `HybridRetriever`. All implement the same `Retriever` trait.
+
+pub mod chunker;
+pub mod embeddings;
+pub mod graph;
+pub mod hybrid;
+
+pub use chunker::{chunk_file, CodeChunk};
+pub use embeddings::{
+    build_or_update as build_or_update_embeddings, cosine_similarity, EmbeddedChunk,
+    EmbedError, EmbeddingClient, EmbeddingIndex,
+};
+pub use graph::{build as build_repo_graph, pagerank, RepoGraph};
+pub use hybrid::HybridRetriever;
 
 use async_trait::async_trait;
 use camino::Utf8PathBuf;

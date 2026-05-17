@@ -12,6 +12,7 @@
 //! Tool deferral and Plan-mode narrowing are handled when building the
 //! tool catalog for each turn.
 
+pub mod auto_test;
 pub mod engine;
 pub mod parser;
 pub mod session;

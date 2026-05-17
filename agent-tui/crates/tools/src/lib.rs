@@ -5,11 +5,13 @@
 //! success. If the language is recognised and parsing fails, the tool
 //! returns an error to the model with the parse error position.
 
+pub mod checkpoint;
 pub mod registry;
 pub mod schema;
 pub mod syntax;
 pub mod tools;
 
+pub use checkpoint::{CheckpointError, CheckpointMeta, CheckpointStore};
 pub use registry::{ToolContext, ToolRegistry};
 pub use schema::ToolSchema;
 pub use tools::{Tool, ToolError, ToolResult};

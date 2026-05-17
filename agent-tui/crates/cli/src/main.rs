@@ -61,6 +61,12 @@ enum Cmd {
     Fix {
         issue: String,
     },
+    /// Rebuild the embedding/retrieval index for the workspace.
+    Index {
+        /// Skip the embeddings rebuild; just refresh the repo graph.
+        #[arg(long)]
+        graph_only: bool,
+    },
 }
 
 #[tokio::main]
@@ -92,6 +98,7 @@ async fn main() -> Result<()> {
             eprintln!("`fix` is stubbed in Phase 2; lands in Phase 3.11");
             Ok(())
         }
+        Some(Cmd::Index { graph_only }) => cmd_index(workspace, graph_only).await,
         None => {
             if let Some(prompt) = cli.prompt {
                 cmd_oneshot(prompt, &cfg, workspace).await
@@ -220,6 +227,31 @@ async fn cmd_models(cfg: &Config) -> Result<()> {
     Ok(())
 }
 
+async fn cmd_index(workspace: Utf8PathBuf, graph_only: bool) -> Result<()> {
+    let g = agent_tui_retrieval::build_repo_graph(&workspace);
+    eprintln!("graph: {} files, {} edges",
+        g.len(),
+        g.edges.iter().map(|e| e.len()).sum::<usize>(),
+    );
+    if graph_only {
+        return Ok(());
+    }
+    let client = agent_tui_retrieval::EmbeddingClient::new();
+    if !client.is_reachable().await {
+        eprintln!(
+            "ollama not reachable at {}; skipping embeddings (graph-only index)",
+            client.base_url,
+        );
+        return Ok(());
+    }
+    eprintln!("indexing embeddings with model `{}`...", client.model);
+    let idx = agent_tui_retrieval::build_or_update_embeddings(&workspace, &client)
+        .await
+        .map_err(|e| anyhow!("embedding build failed: {e}"))?;
+    eprintln!("indexed {} chunks", idx.chunks.len());
+    Ok(())
+}
+
 async fn cmd_oneshot(prompt: String, cfg: &Config, workspace: Utf8PathBuf) -> Result<()> {
     let provider = resolve_provider(cfg);
     let model = resolve_model(cfg, provider);
@@ -240,6 +272,7 @@ async fn cmd_oneshot(prompt: String, cfg: &Config, workspace: Utf8PathBuf) -> Re
     let session = Session::new(model);
     let (reg, mut ctx) = ToolRegistry::with_builtins(workspace);
     ctx.yolo = cfg.yolo || std::env::var("AGENT_TUI_YOLO").is_ok();
+    ToolRegistry::enable_hybrid_retrieval(&mut ctx).await;
     let engine = Engine::new(session, client, Arc::new(reg), Arc::new(ctx));
     let h = engine.spawn();
     h.send(Op::Submit {
